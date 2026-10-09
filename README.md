@@ -16,7 +16,7 @@ Template R projects for an undergraduate **neuroscience research methods** cours
 | `correlation_regression` | Correlation and regression | Planned |
 | `one_sample_t_test` | One-sample t-test | **Ready for review** |
 | `two_sample_t_test` | Two-sample t-test | **Ready for review** |
-| `oneway_anova` | One-way analysis of variance | Planned |
+| `oneway_anova` | One-way analysis of variance | **Ready for review** |
 | `twoway_anova` | Two-way analysis of variance | Planned |
 | `chisquare_test` | Chi-square test | Planned |
 
@@ -62,7 +62,7 @@ Think of it like a lab notebook with its own labeled shelf: everything for one e
 
 ### Packages used
 
-The projects use the **tidyverse** (`dplyr`, `ggplot2`, `readr`, `purrr`, and friends) and tidyverse-friendly packages: `here`, `broom`, `effectsize`, `pwr`, `knitr`, `kableExtra`, and `patchwork`. Other packages may be added in later projects (for example `car` and `emmeans` for ANOVA). Each project's `R/00_setup.R` installs anything missing.
+The projects use the **tidyverse** (`dplyr`, `ggplot2`, `readr`, `purrr`, and friends) and tidyverse-friendly packages: `here`, `broom`, `effectsize`, `pwr`, `knitr`, `kableExtra`, and `patchwork`. Other packages may be added in later projects (for example `rstatix` and `emmeans` for ANOVA). Each project's `R/00_setup.R` installs anything missing.
 
 ## Conventions used throughout
 

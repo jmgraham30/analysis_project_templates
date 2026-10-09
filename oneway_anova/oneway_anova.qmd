@@ -1,25 +1,730 @@
 ---
-title: "oneway_anova"
-format: html
+title: "Does Drug Dose Change Locomotor Activity? A One-Way ANOVA"
+subtitle: "Lab notebook template: one-way analysis of variance (ANOVA)"
+author: "Your Name"
+date: today
+date-format: "MMMM D, YYYY"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: true
+    code-fold: show
+    code-tools: true
+    embed-resources: true
+    smooth-scroll: true
+    fig-width: 6.5
+    fig-height: 4.2
+    fig-dpi: 300
+    fig-align: center
+    tbl-cap-location: top
+execute:
+  echo: true
+  warning: false
+  message: false
 ---
 
-## Quarto
+::: {.callout-note icon=false}
+## How to use this notebook
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+This is a **template lab notebook** that walks through a complete analysis: a question, a plan, the data, the code, and a written report of the results. To make it yours:
 
-## Running Code
+1. Open `oneway_anova.Rproj` first (so RStudio uses this folder as the working directory).
+2. Replace `Your Name` in the header above with your name.
+3. Click **Render** to build the notebook. Every number, table, and figure is regenerated from the data and code. (This notebook runs about 10,000 simulated experiments, so rendering takes a little longer than the others.)
+4. Read the text, then change things and re-render to see what happens (see @sec-your-turn).
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+The data are **simulated** for teaching purposes. No animals were tested.
+:::
+
+| Notebook details | |
+|:--|:--|
+| **Project** | One-way (between-subjects) ANOVA |
+| **Data file** | `Data/locomotor_dose.csv` |
+| **Analysis script** | `R/02_analysis.R` (same analysis, with extra teaching comments) |
+| **Helper code** | `R/00_setup.R` (packages, plot theme, formatting helpers) |
+| **Software** | `r R.version.string`; Quarto |
 
 ```{r}
-1 + 1
+#| label: setup
+# Load packages, the plot theme, and helper functions (see R/00_setup.R)
+source("R/00_setup.R")
 ```
 
-You can add options to executable code like this 
+# Problem Statement and Hypotheses {#sec-problem}
+
+## Background
+
+Stimulant drugs increase **locomotor activity**, the amount an animal moves around. A standard way to measure it is the **open-field test**: a mouse is placed in an empty arena and a video system tracks how far it travels. Pharmacologists are usually interested in the **dose-response relationship**: how does the effect change as the dose increases?
+
+Here, four independent groups of mice received an injection of either saline (**Vehicle**, the control) or one of three doses of a stimulant drug (**Low**, **Medium**, **High**).
+
+## Problem statement
+
+> **Does the mean distance traveled in the open field differ among the four dose groups?**
+
+We are comparing the means of **more than two independent groups**, so the appropriate test is a **one-way analysis of variance (ANOVA)**. "One-way" means there is one grouping variable (dose group).
+
+## Hypotheses
+
+The **null hypothesis** ($H_0$) says all four population means are the same. The **alternative hypothesis** ($H_1$) says they are not all the same.
+
+$$
+H_0: \mu_{\text{Vehicle}} = \mu_{\text{Low}} = \mu_{\text{Medium}} = \mu_{\text{High}}
+$$
+
+$$
+H_1: \text{at least one population mean differs from the others}
+$$
+
+Note that $H_1$ does **not** say that every group differs from every other group, and it does not say *which* groups differ. The ANOVA F test is called an **omnibus test**: it asks whether there is any difference at all. If the answer is yes, **follow-up (post hoc) comparisons** (@sec-posthoc) tell us where the differences are. We set the **significance level** at $\alpha = .05$.
+
+::: {.callout-tip}
+## Why not just run several t-tests?
+With four groups there are six possible pairs. Running six ordinary t-tests, each at $\alpha = .05$, would give a much larger than 5% chance of at least one false positive. ANOVA tests all the groups at once with a single, correctly calibrated test, and post hoc tests then adjust for the multiple comparisons. We demonstrate the problem in @sec-multiple.
+:::
+
+## Decision errors: Type I and Type II {#sec-errors}
+
+Any decision based on samples can be wrong. @tbl-errors shows the four possible outcomes of a hypothesis test.
 
 ```{r}
-#| echo: false
-2 * 2
+#| label: tbl-errors
+#| tbl-cap: "Possible outcomes of a hypothesis test"
+tribble(
+  ~Decision,                 ~`H0 is actually true`,                         ~`H0 is actually false`,
+  "Reject H0",               "Type I error (probability = α)",                "Correct decision (probability = power = 1 − β)",
+  "Fail to reject H0",       "Correct decision (probability = 1 − α)",        "Type II error (probability = β)"
+) |>
+  pub_table(align = "lcc")
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+- A **Type I error** (false positive) means concluding that dose affects locomotion when, in the population, it does not. We control this rate by choosing $\alpha$. With many comparisons, the risk of *at least one* Type I error grows (the "family-wise" error rate).
+- A **Type II error** (false negative) means missing a real effect of dose. Its probability is $\beta$, and **power** $= 1 - \beta$ is the probability of detecting a real effect of a given size. We study these errors in @sec-sim.
+
+# Methods {#sec-methods}
+
+## Subjects and design
+
+Forty-eight adult mice were randomly assigned to one of four groups of 12: **Vehicle** (saline), **Low** (2 mg/kg), **Medium** (5 mg/kg), or **High** (10 mg/kg). Each group had an equal number of females and males (6 and 6). *(Simulated data for teaching. In a real notebook, give the species/strain, age, source, housing, how animals were randomized, and the approval number of your animal-care protocol.)*
+
+Random assignment is a strength of the design: because mice were assigned to doses by chance, differences among the groups can reasonably be attributed to the drug, not to pre-existing differences among the mice. Groups of equal size make the design **balanced**, which makes ANOVA more robust to violations of its assumptions.
+
+## Procedure
+
+Each mouse received a single injection and, after a short delay, was placed in an open-field arena for 30 minutes. A video tracking system recorded the **total distance traveled**. *(In a real notebook, include the arena size, lighting, time of day, injection route and timing, and whether the experimenter was blind to dose. Blind testing protects against unintentional bias.)*
+
+## Outcome measure
+
+The outcome was **total distance traveled in 30 minutes, in meters** (a continuous measure; larger values mean more locomotor activity).
+
+## Data description {#sec-data}
+
+The raw data are stored in `Data/locomotor_dose.csv` (one row per mouse). The raw file is **never edited by hand**: all cleaning and calculations are done in code so they are documented and repeatable.
+
+```{r}
+#| label: tbl-dictionary
+#| tbl-cap: "Variables in the raw data file"
+tribble(
+  ~Variable,       ~Type,         ~Description,
+  "mouse_id",      "Text",        "Unique animal identifier (M01–M48)",
+  "dose_group",    "Category",    "Dose group: Vehicle, Low, Medium, or High",
+  "dose_mgkg",     "Number",      "Dose in mg/kg (0, 2, 5, or 10)",
+  "sex",           "Category",    "F = female, M = male",
+  "distance_m",    "Number",      "Total distance traveled in 30 minutes, in meters"
+) |>
+  pub_table(align = "lll")
+```
+
+We import the data and immediately look at it: its structure, its ranges, and whether anything is missing or duplicated.
+
+```{r}
+#| label: import
+alpha        <- 0.05   # significance level (accepted Type I error rate)
+target_power <- 0.80   # conventional minimum power
+
+loco_raw <- read_csv(here("Data", "locomotor_dose.csv"), show_col_types = FALSE)
+
+glimpse(loco_raw)
+```
+
+```{r}
+#| label: checks
+tibble(
+  `Rows`                 = nrow(loco_raw),
+  `Missing values`       = sum(is.na(loco_raw)),
+  `Duplicated mouse IDs` = sum(duplicated(loco_raw$mouse_id))
+) |>
+  pub_table(align = "ccc")
+```
+
+The grouping variable must be a **factor** with its levels in a meaningful order. Otherwise R sorts the groups alphabetically (High, Low, Medium, Vehicle), which makes tables and plots confusing.
+
+```{r}
+#| label: prepare
+loco <- loco_raw |>
+  mutate(
+    dose_group = factor(dose_group, levels = c("Vehicle", "Low", "Medium", "High")),
+    sex        = factor(sex, levels = c("F", "M"), labels = c("Female", "Male"))
+  )
+
+k <- nlevels(loco$dose_group)   # number of groups
+N <- nrow(loco)                 # total number of mice
+n_per_group <- count(loco, dose_group)$n |> unique()   # 12 (balanced design)
+```
+
+The final data set contains **N = `r N`** mice in **`r k`** groups of **`r n_per_group`**, with no missing values.
+
+# Statistical Analysis {#sec-stats}
+
+## Planned analysis
+
+- **Omnibus test.** A one-way between-subjects ANOVA comparing the four group means, with $\alpha = .05$. The test statistic is
+$$F = \frac{MS_{\text{between}}}{MS_{\text{within}}} = \frac{\text{variability among the group means}}{\text{variability among mice within the same group}},$$
+with $df = (k - 1,\; N - k)$. If the group means differ more than chance variation within groups would produce, $F$ is large.
+- **Assumptions.** (1) Independence: each mouse is in one group and measured once, and mice do not influence each other; (2) the **residuals** (each mouse's distance from its own group mean) are approximately normal; (3) the groups have similar variances ("homogeneity of variance"); (4) no extreme outliers. We check these with a Q-Q plot, a residuals-versus-fitted plot, the Shapiro–Wilk test, Levene's test, and an outlier screen.
+- **Effect size.** **Eta-squared** ($\eta^2$), the proportion of the total variability in distance explained by dose group, with a 90% confidence interval (the convention for F tests); and **omega-squared** ($\omega^2$), a less biased version. By convention, $\eta^2$ of .01, .06, and .14 are small, medium, and large. Cohen's $f$ (.10, .25, .40 for small, medium, large) is used in power analysis.
+- **Post hoc tests.** If, and only if, the omnibus test is significant, we compare all six pairs of groups with **Tukey's HSD** test, which controls the family-wise error rate at $\alpha$ across all six comparisons. We report mean differences with Tukey-adjusted 95% confidence intervals and Cohen's *d* for each pair. As an alternative when only the comparisons with the control matter, we also show **Dunnett's test**.
+- **Robustness checks.** Welch's ANOVA (does not assume equal variances), the Games–Howell post hoc test, and the Kruskal–Wallis test (does not assume normality).
+- **Software.** Analyses were run in `r R.version.string` using the tidyverse, `broom`, `rstatix`, `emmeans`, `effectsize`, and `pwr`.
+
+## Power and sample size plan {#sec-power-plan}
+
+**Power** is the probability of rejecting $H_0$ when it is false. For ANOVA it depends on the effect size ($f$), the number of groups, the number of mice per group, and $\alpha$. Good practice is to plan sample size *before* collecting data and to record the plan in your notebook. (Here, because this is a teaching template, we do the calculation alongside the data.)
+
+```{r}
+#| label: power-plan
+# A priori: how many mice PER GROUP for 80% power to detect a medium effect (f = 0.25)?
+plan <- pwr.anova.test(k = k, f = 0.25, sig.level = alpha, power = target_power)
+
+# Sensitivity: with our n per group, what is the smallest effect we could detect
+# with 80% power?
+sens <- pwr.anova.test(k = k, n = n_per_group, sig.level = alpha, power = target_power)
+
+# Power to detect a medium (f = 0.25) and a large (f = 0.40) effect with our n
+power_medium <- pwr.anova.test(k = k, n = n_per_group, f = 0.25, sig.level = alpha)$power
+power_large  <- pwr.anova.test(k = k, n = n_per_group, f = 0.40, sig.level = alpha)$power
+```
+
+To detect a medium effect ($f = 0.25$) with 80% power at $\alpha = .05$ in a design with `r k` groups, we would need about **`r ceiling(plan$n)` mice per group** (always round up). With `r n_per_group` mice per group, the smallest effect we could detect with 80% power is **$f$ = `r fmt_num(sens$f)`** (a large effect). Our power to detect a true *medium* effect is only about **`r round(100 * power_medium)`%**, and for a *large* ($f = 0.40$) effect about **`r round(100 * power_large)`%**. This study can reliably detect only very large effects.
+
+# Results and Conclusions {#sec-results}
+
+## Exploratory data analysis {#sec-eda}
+
+Before running any test, we describe and plot the data for each group.
+
+```{r}
+#| label: tbl-desc
+#| tbl-cap: "Descriptive statistics for distance traveled (m), by dose group"
+desc <- loco |>
+  group_by(`Dose group` = dose_group) |>
+  summarize(
+    n      = n(),
+    M      = mean(distance_m),
+    SD     = sd(distance_m),
+    SE     = SD / sqrt(n),
+    Median = median(distance_m),
+    Min    = min(distance_m),
+    Max    = max(distance_m)
+  )
+
+desc |>
+  pub_table(digits = 2, align = "lcccccc")
+```
+
+```{r}
+#| label: desc-helper
+# A small helper to pull one group's row from the descriptive table
+gm <- function(grp) filter(desc, `Dose group` == grp)
+```
+
+@tbl-desc shows that mean distance traveled rose with dose, from `r fmt_num(gm("Vehicle")$M, 1)` m in the Vehicle group to `r fmt_num(gm("High")$M, 1)` m in the High-dose group. The standard deviations ranged from `r fmt_num(min(desc$SD), 1)` to `r fmt_num(max(desc$SD), 1)` m, so the groups were not equally variable, a point we return to when checking assumptions.
+
+```{r}
+#| label: tbl-sex
+#| tbl-cap: "Number of females and males in each group"
+loco |>
+  count(`Dose group` = dose_group, sex) |>
+  pivot_wider(names_from = sex, values_from = n) |>
+  pub_table(align = "lcc")
+```
+
+```{r}
+#| label: fig-eda
+#| fig-cap: "Distance traveled in the open field by dose group. Each point is one mouse; boxes show the median and interquartile range."
+#| fig-alt: "Dot plot with box plots of distance traveled for four dose groups. Medians and points rise from the Vehicle group to the High-dose group, with more spread in the Medium and High groups."
+#| fig-width: 5.5
+#| fig-height: 4
+ggplot(loco, aes(dose_group, distance_m, color = dose_group, shape = dose_group)) +
+  geom_boxplot(width = 0.4, outlier.shape = NA, color = "gray40", fill = NA) +
+  geom_jitter(width = 0.12, height = 0, size = 2.3, alpha = 0.85) +
+  scale_color_viridis_d(end = 0.85) +
+  labs(x = "Dose group", y = "Distance traveled (m)") +
+  theme(legend.position = "none")
+```
+
+The data in @fig-eda show a general increase in distance with dose, with the Medium and High groups more spread out than the Vehicle and Low groups.
+
+## Checking the assumptions {#sec-assumptions}
+
+The ANOVA assumptions concern the **residuals**, so we first fit the model. `aov()` fits a one-way ANOVA using the formula `outcome ~ grouping variable`.
+
+```{r}
+#| label: fit
+fit <- aov(distance_m ~ dose_group, data = loco)
+
+res_df <- tibble(.fitted = fitted(fit), .resid = resid(fit))
+
+shapiro <- shapiro.test(res_df$.resid) |> tidy()
+sd_ratio <- max(desc$SD) / min(desc$SD)
+levene <- loco |> levene_test(distance_m ~ dose_group)
+
+outliers <- loco |>
+  group_by(dose_group) |>
+  identify_outliers(distance_m)
+```
+
+```{r}
+#| label: fig-assumptions
+#| fig-cap: "Residual diagnostics for the one-way ANOVA. (A) Normal Q-Q plot of the residuals; points close to the line indicate approximate normality. (B) Residuals versus fitted values (the group means); a similar vertical spread in every group supports equal variances."
+#| fig-alt: "Two panels. Panel A is a normal Q-Q plot of residuals whose points fall close to a straight line. Panel B plots residuals against fitted values for the four groups; the vertical spread is somewhat larger for the two higher-mean groups than for the two lower-mean groups."
+#| fig-width: 7
+#| fig-height: 3.5
+p_qq <- ggplot(res_df, aes(sample = .resid)) +
+  stat_qq(color = pal["blue"]) +
+  stat_qq_line(color = "black") +
+  labs(x = "Theoretical quantiles", y = "Residuals")
+
+p_res <- ggplot(res_df, aes(.fitted, .resid)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point(color = pal["blue"], size = 2, alpha = 0.8) +
+  labs(x = "Fitted values (group means)", y = "Residuals")
+
+p_qq + p_res + plot_annotation(tag_levels = "A")
+```
+
+- **Normality.** The residuals' Q-Q plot (@fig-assumptions A) is close to the line, and the Shapiro–Wilk test `r if (shapiro$p.value < alpha) "indicated" else "did not indicate"` a departure from normality, *W* = `r fmt_num(shapiro$statistic, 3)`, `r fmt_p(shapiro$p.value, md = TRUE)`.
+- **Equal variances.** The largest group SD was **`r fmt_num(sd_ratio)` times** the smallest, which is a moderate difference (a common rule of thumb is that ratios under about 2 are tolerable, especially with equal group sizes). The residual plot (@fig-assumptions B) shows slightly more spread in the higher-mean groups. Levene's test was `r if (levene$p < alpha) "significant" else "not significant"`, *F*(`r levene$df1`, `r levene$df2`) = `r fmt_num(levene$statistic)`, `r fmt_p(levene$p, md = TRUE)`, but it has low power with groups this small, so we also check the conclusion with Welch's ANOVA (@sec-robust).
+- **Outliers.** `r nrow(outliers)` observation (`r paste(outliers$mouse_id, collapse = ", ")`, in the `r paste(outliers$dose_group, collapse = ", ")` group) was flagged as an outlier (beyond 1.5 × IQR from the quartiles), but it was `r if (any(outliers$is.extreme)) "extreme" else "not extreme"` (beyond 3 × IQR) and there was no reason to think it was an error, so it was **kept**. Removing data only because they are inconvenient is not acceptable. Exclusion rules should be set in advance and reported.
+
+::: {.callout-warning}
+## A non-significant assumption test is not proof the assumption holds
+With small samples, tests such as Shapiro–Wilk and Levene have little power to detect problems, and with large samples they flag trivial ones. Judge the plots first and use the tests as supporting evidence.
+:::
+
+## The omnibus F test {#sec-test}
+
+```{r}
+#| label: anova
+anova_tbl <- tidy(fit)
+
+F_value <- anova_tbl$statistic[1]
+df1     <- anova_tbl$df[1]
+df2     <- anova_tbl$df[2]
+p_anova <- anova_tbl$p.value[1]
+```
+
+```{r}
+#| label: tbl-anova
+#| tbl-cap: "One-way ANOVA of distance traveled by dose group"
+anova_tbl |>
+  transmute(
+    Source = if_else(term == "dose_group", "Dose group (between)", "Residuals (within)"),
+    df,
+    `Sum of squares` = sumsq,
+    `Mean square`    = meansq,
+    F = statistic,
+    p = fmt_p_col(p.value)
+  ) |>
+  pub_table(digits = 2, align = "lccccc")
+```
+
+The F statistic compares the variability **between** group means (mean square = `r fmt_num(anova_tbl$meansq[1], 1)`) with the variability **within** groups (mean square = `r fmt_num(anova_tbl$meansq[2], 1)`). Their ratio is *F*(`r df1`, `r df2`) = `r fmt_num(F_value)`, `r fmt_p(p_anova, md = TRUE)`.
+
+**Decision rule.** If $p < \alpha$, we reject $H_0$. Here $p$ is `r if (p_anova < alpha) "less" else "not less"` than $\alpha$ = `r alpha`, so we **`r if (p_anova < alpha) "reject" else "fail to reject"` $H_0$**: `r if (p_anova < alpha) "the data are not consistent with all four population means being equal." else "we do not have evidence that the population means differ, and we should not run post hoc tests."`
+
+::: {.callout-important}
+## What a p-value is (and is not)
+The p-value is the probability of obtaining an F statistic at least this large **if $H_0$ were true**. It is *not* the probability that $H_0$ is true, and it says nothing about *which* groups differ or how large the differences are.
+:::
+
+## Effect size {#sec-effect}
+
+```{r}
+#| label: effect-size
+eta2   <- eta_squared(fit, ci = 0.90, alternative = "two.sided")
+omega2 <- omega_squared(fit, ci = 0.90, alternative = "two.sided")
+f_eff  <- cohens_f(fit, ci = 0.90, alternative = "two.sided")
+```
+
+```{r}
+#| label: tbl-effect
+#| tbl-cap: "Effect sizes for the omnibus test (with 90% confidence intervals)"
+tibble(
+  `Effect size`      = c("Eta-squared (η²)", "Omega-squared (ω²)", "Cohen's f"),
+  Estimate           = c(eta2$Eta2, omega2$Omega2, f_eff$Cohens_f),
+  `90% CI`           = c(paste0("[", fmt_apa(eta2$CI_low), ", ", fmt_apa(eta2$CI_high), "]"),
+                         paste0("[", fmt_apa(omega2$CI_low), ", ", fmt_apa(omega2$CI_high), "]"),
+                         paste0("[", fmt_num(f_eff$CI_low), ", ", fmt_num(f_eff$CI_high), "]"))
+) |>
+  mutate(Estimate = fmt_num(Estimate)) |>
+  pub_table(align = "lcc")
+```
+
+Dose group explained about **`r round(100 * eta2$Eta2)`%** of the total variability in distance traveled ($\eta^2$ = `r fmt_apa(eta2$Eta2)`, 90% CI [`r fmt_apa(eta2$CI_low)`, `r fmt_apa(eta2$CI_high)`]), conventionally a **`r interpret_eta_squared(eta2$Eta2, rules = "field2013")`** effect. The bias-corrected $\omega^2$ is smaller (`r fmt_apa(omega2$Omega2)`), as expected. The confidence interval is wide: with `r n_per_group` mice per group, the size of the effect is estimated imprecisely.
+
+## Post hoc comparisons: which groups differ? {#sec-posthoc}
+
+Because the omnibus test was significant, we can ask where the differences are. There are $\binom{4}{2} = 6$ pairs of groups. **Tukey's HSD** compares them all while keeping the chance of *any* false positive across the six comparisons at 5%. Each comparison is (higher dose) minus (lower dose), so a **positive** difference means the higher-dose group traveled farther.
+
+```{r}
+#| label: posthoc
+emm <- emmeans(fit, ~ dose_group)
+
+tukey_tbl <- contrast(emm, method = "revpairwise", adjust = "tukey") |>
+  summary(infer = TRUE) |>
+  as_tibble()
+
+d_tbl <- eff_size(emm, sigma = sigma(fit), edf = df.residual(fit),
+                  method = "revpairwise") |>
+  as_tibble()
+
+tk <- left_join(tukey_tbl, select(d_tbl, contrast, d = effect.size,
+                                  d_low = lower.CL, d_high = upper.CL),
+                by = "contrast")
+```
+
+```{r}
+#| label: tbl-tukey
+#| tbl-cap: "Tukey HSD pairwise comparisons of distance traveled (m)"
+tk |>
+  transmute(
+    Comparison = str_replace(contrast, " - ", " minus "),
+    `Mean difference`    = estimate,
+    `95% CI (Tukey-adjusted)` = paste0("[", fmt_num(lower.CL), ", ", fmt_num(upper.CL), "]"),
+    `Adjusted p`         = fmt_p_col(p.value),
+    `Cohen's d`          = fmt_num(d),
+    `95% CI of d`        = paste0("[", fmt_num(d_low), ", ", fmt_num(d_high), "]")
+  ) |>
+  pub_table(digits = 2, align = "lccccc")
+```
+
+```{r}
+#| label: tukey-objects
+sig <- tk |> filter(p.value < alpha)
+hv  <- tk |> filter(contrast == "High - Vehicle")
+mv  <- tk |> filter(contrast == "Medium - Vehicle")
+lv  <- tk |> filter(contrast == "Low - Vehicle")
+```
+
+`r nrow(sig)` of the 6 comparisons were significant after adjustment: `r if (nrow(sig) > 0) paste(str_replace(sig$contrast, " - ", " minus "), collapse = "; ") else "none"`. In particular, the High-dose group traveled **`r fmt_num(hv$estimate)` m** farther than the Vehicle group (Tukey-adjusted 95% CI [`r fmt_num(hv$lower.CL)`, `r fmt_num(hv$upper.CL)`], `r fmt_p(hv$p.value, md = TRUE)`, Cohen's *d* = `r fmt_num(hv$d)`), whereas the Low dose did not differ clearly from Vehicle (difference = `r fmt_num(lv$estimate)` m, `r fmt_p(lv$p.value, md = TRUE)`).
+
+::: {.callout-caution}
+## "Not significant" does not mean "no difference"
+Several pairs (for example, Low vs. Vehicle) were not significant. With only `r n_per_group` mice per group, the post hoc tests have low power, and the confidence intervals for those pairs include differences of 5 m or more. Failing to detect a difference is not evidence that none exists.
+:::
+
+**Planned comparisons with a control: Dunnett's test.** If the only questions of interest are "does each dose differ from the vehicle?", **Dunnett's test** compares each dose with the control only. Because it makes fewer comparisons (3 instead of 6), it is slightly more powerful than Tukey's test for those three questions. The comparisons should be chosen *before* looking at the data.
+
+```{r}
+#| label: tbl-dunnett
+#| tbl-cap: "Dunnett's test: each dose compared with the Vehicle group"
+contrast(emm, method = "trt.vs.ctrl", ref = 1) |>   # Dunnett adjustment is the default
+  summary(infer = TRUE) |>
+  as_tibble() |>
+  transmute(
+    Comparison = str_replace(contrast, " - ", " minus "),
+    `Mean difference` = estimate,
+    `95% CI (Dunnett-adjusted)` = paste0("[", fmt_num(lower.CL), ", ", fmt_num(upper.CL), "]"),
+    `Adjusted p` = fmt_p_col(p.value)
+  ) |>
+  pub_table(digits = 2, align = "lccc")
+```
+
+```{r}
+#| label: fig-main
+#| fig-cap: "Effect of drug dose on distance traveled. (A) Each point is one mouse; boxes show the median and interquartile range; black markers show each group's mean with its 95% confidence interval. (B) Differences between every pair of groups (higher dose minus lower dose) with Tukey-adjusted 95% confidence intervals; intervals that exclude the dashed zero line indicate significant differences."
+#| fig-alt: "Panel A shows distance traveled rising across the four dose groups with group means and confidence intervals. Panel B shows six pairwise mean differences with confidence intervals; the intervals for Medium minus Vehicle and High minus Vehicle do not cross the dashed zero line, while the other four intervals do."
+#| fig-width: 9
+#| fig-height: 4.5
+group_ci <- as_tibble(summary(emm))   # estimated mean, SE, df, lower.CL, upper.CL
+
+fig_a <- ggplot(loco, aes(dose_group, distance_m, color = dose_group,
+                          shape = dose_group)) +
+  geom_boxplot(width = 0.4, outlier.shape = NA, color = "gray40", fill = NA) +
+  geom_jitter(width = 0.1, height = 0, size = 2.2, alpha = 0.8) +
+  geom_pointrange(data = group_ci,
+                  aes(x = dose_group, y = emmean, ymin = lower.CL, ymax = upper.CL),
+                  position = position_nudge(x = 0.33), color = "black",
+                  shape = 16, size = 0.5, linewidth = 0.8, inherit.aes = FALSE) +
+  scale_color_viridis_d(end = 0.85) +
+  labs(x = "Dose group", y = "Distance traveled (m)") +
+  theme(legend.position = "none")
+
+fig_b <- tukey_tbl |>
+  mutate(contrast = fct_rev(fct_inorder(contrast))) |>
+  ggplot(aes(estimate, contrast)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray30") +
+  geom_pointrange(aes(xmin = lower.CL, xmax = upper.CL), color = pal["green"],
+                  size = 0.5, linewidth = 0.9) +
+  labs(x = "Mean difference (m)\nwith Tukey-adjusted 95% CI", y = NULL)
+
+fig_a + fig_b + plot_layout(widths = c(1.2, 1)) + plot_annotation(tag_levels = "A")
+```
+
+## Power and sensitivity {#sec-power}
+
+The power curves in @fig-power show how power grows with the number of mice per group for small, medium, and large true effects. The dotted vertical line marks our sample size.
+
+```{r}
+#| label: fig-power
+#| fig-cap: "Statistical power of a one-way ANOVA with four groups (α = .05) as a function of the number of mice per group, for small, medium, and large true effects. The dashed horizontal line marks 80% power; the dotted vertical line marks the present sample size."
+#| fig-alt: "Line graph of statistical power against mice per group for small, medium, and large effects. Power rises with sample size, fastest for the large effect. At 12 mice per group, power is about 60 percent for a large effect and about 25 percent for a medium effect, below the 80 percent reference line."
+power_curve <- expand_grid(n = 5:80, f = c(0.10, 0.25, 0.40)) |>
+  mutate(
+    power   = map2_dbl(n, f, ~ pwr.anova.test(k = k, n = .x, f = .y,
+                                              sig.level = alpha)$power),
+    f_label = factor(f, labels = c("Small (f = 0.10)", "Medium (f = 0.25)",
+                                   "Large (f = 0.40)"))
+  )
+
+ggplot(power_curve, aes(n, power, color = f_label, linetype = f_label)) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = target_power, linetype = "dashed") +
+  geom_vline(xintercept = n_per_group, linetype = "dotted") +
+  scale_color_manual(values = unname(pal[c("sky", "blue", "vermillion")])) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+  labs(x = "Mice per group", y = "Power",
+       color = "True effect size", linetype = "True effect size")
+```
+
+Our observed effect was large (Cohen's $f$ = `r fmt_num(f_eff$Cohens_f)`, well above the "large" benchmark of 0.40), and we detected it. But with `r n_per_group` mice per group, the power to detect a true *medium* effect ($f = 0.25$) was only about **`r round(100 * power_medium)`%**, so a medium-sized effect would usually be missed (a Type II error).
+
+::: {.callout-caution}
+## Significant results from small studies tend to exaggerate effects
+When power is low, the studies that *do* reach significance are, on average, the ones whose samples happened to show an unusually large difference. A significant result from a small study therefore tends to **overestimate** the true effect (sometimes called the "winner's curse"). Rely on the confidence intervals, not just the point estimates, and look for replication.
+:::
+
+::: {.callout-caution}
+## Avoid "observed power"
+Computing power from the effect size you just observed adds no information beyond the p-value and is widely discouraged. Use the **sensitivity analysis** above (what could we detect?) and the **confidence intervals** (what effects are compatible with our data?) instead.
+:::
+
+## Type I and Type II errors in action {#sec-sim}
+
+Error rates are long-run properties: they describe what would happen if we repeated the experiment many times. We can see this directly by **simulating** 10,000 experiments (four groups of `r n_per_group` mice each) in three imaginary worlds where we know the truth:
+
+1. **$H_0$ is true.** All four groups have the same population mean.
+2. **$H_1$ is true, with a medium effect** ($f = 0.25$).
+3. **$H_1$ is true, with a large effect** ($f = 0.56$, similar to our data).
+
+In each simulated experiment we record the omnibus ANOVA p-value, and also the *smallest* of the six pairwise p-values, both unadjusted and Tukey-adjusted. (For speed, the statistics are computed directly from the group means and the pooled within-group variance, which is exactly what ANOVA and Tukey's test use.)
+
+```{r}
+#| label: simulate
+simulate_anova <- function(means, sd, n, n_sims = 10000) {
+  k   <- length(means)
+  N   <- k * n
+  idx <- combn(k, 2)                      # all pairs of groups
+
+  results <- map(seq_len(n_sims), function(i) {
+    x   <- matrix(rnorm(N, mean = rep(means, each = n), sd = sd), nrow = n)
+    m   <- colMeans(x)                    # group means
+    mse <- mean(apply(x, 2, var))         # pooled within-group variance
+    F   <- n * var(m) / mse               # F statistic (balanced design)
+    big <- max(abs(m[idx[1, ]] - m[idx[2, ]]))   # the LARGEST pairwise difference
+    # The smallest p-value among all pairs always belongs to the largest difference.
+    t   <- big / sqrt(2 * mse / n)        # its t statistic
+    q   <- big / sqrt(mse / n)            # its studentized range statistic (Tukey)
+    c(p_anova     = pf(F, k - 1, N - k, lower.tail = FALSE),
+      p_min_unadj = 2 * pt(t, N - k, lower.tail = FALSE),
+      p_min_tukey = ptukey(q, k, N - k, lower.tail = FALSE))
+  })
+
+  as_tibble(do.call(rbind, results))      # one row per simulated experiment
+}
+
+# Equally spaced means that give a chosen Cohen's f for a given SD
+means_for_f <- function(f, sd, k, base = 40) {
+  step <- f * sd / sqrt((k^2 - 1) / 12)
+  base + (0:(k - 1)) * step
+}
+
+set.seed(123)                              # makes the simulation reproducible
+sd_within <- sqrt(anova_tbl$meansq[2])     # our pooled within-group SD
+
+sim_h0     <- simulate_anova(rep(40, k),                      sd_within, n_per_group)
+sim_medium <- simulate_anova(means_for_f(0.25, sd_within, k), sd_within, n_per_group)
+sim_large  <- simulate_anova(means_for_f(0.56, sd_within, k), sd_within, n_per_group)
+
+sim_summary <- bind_rows(
+  `H0 true (no real effect)`   = summarize(sim_h0,     across(everything(), ~ mean(.x < alpha))),
+  `H1 true, medium (f = 0.25)` = summarize(sim_medium, across(everything(), ~ mean(.x < alpha))),
+  `H1 true, large (f = 0.56)`  = summarize(sim_large,  across(everything(), ~ mean(.x < alpha))),
+  .id = "world"
+)
+```
+
+```{r}
+#| label: tbl-sim
+#| tbl-cap: "Percent of 10,000 simulated experiments with p < .05 (four groups of 12 mice)"
+sim_summary |>
+  mutate(across(-world, ~ scales::percent(.x, accuracy = 0.1))) |>
+  rename(World = world,
+         `ANOVA (omnibus F test)` = p_anova,
+         `At least one unadjusted pairwise t-test` = p_min_unadj,
+         `At least one Tukey-adjusted pairwise test` = p_min_tukey) |>
+  pub_table(align = "lccc")
+```
+
+How to read @tbl-sim:
+
+- **In the first row ($H_0$ is true), every percentage is a Type I error rate.** The omnibus ANOVA and the Tukey-adjusted comparisons falsely "find something" in about **`r scales::percent(sim_summary$p_anova[1], accuracy = 0.1)`** and **`r scales::percent(sim_summary$p_min_tukey[1], accuracy = 0.1)`** of experiments, close to our chosen 5%.
+- **In the other rows ($H_1$ is true), the percentages are power**, the chance of detecting the real effect. With a medium effect the ANOVA has power of only about **`r scales::percent(sim_summary$p_anova[2], accuracy = 0.1)`**, so it commits a Type II error in about **`r scales::percent(1 - sim_summary$p_anova[2], accuracy = 0.1)`** of experiments. With a large effect, power is about **`r scales::percent(sim_summary$p_anova[3], accuracy = 0.1)`**.
+- Simulated rates have a little random error of their own: with 10,000 experiments, a rate near 5% is accurate to within about ±0.4 percentage points.
+
+### The multiple-comparisons problem {#sec-multiple}
+
+Now look at the middle column of the first row of @tbl-sim: **`r scales::percent(sim_summary$p_min_unadj[1], accuracy = 0.1)`**. When all four groups are really the same, running all six pairwise t-tests at $\alpha = .05$ and checking whether *any* is significant produces a false positive about **`r scales::percent(sim_summary$p_min_unadj[1], accuracy = 0.1)`** of the time, roughly four times the intended 5% (@fig-fwer). (If the six tests were independent, the rate would be $1 - 0.95^6 \approx 26\%$; the comparisons share data, so it is somewhat lower, but still far too high.) This is why we use an omnibus test first and adjusted post hoc methods such as Tukey's HSD, and why a study that tests many things and reports only the "significant" ones is so misleading.
+
+```{r}
+#| label: fig-fwer
+#| fig-cap: "When all four group means are truly equal, the chance of at least one false positive: the omnibus ANOVA and Tukey-adjusted comparisons stay near the intended 5% (dashed line), but running all six pairwise t-tests without adjustment gives a much higher false-positive rate."
+#| fig-alt: "Bar chart of false-positive rates. The ANOVA and Tukey-adjusted bars are just under the dashed 5 percent line. The unadjusted pairwise t-test bar is about 19 percent, nearly four times higher."
+#| fig-width: 6
+#| fig-height: 4
+sim_summary |>
+  filter(world == "H0 true (no real effect)") |>
+  pivot_longer(-world, names_to = "approach", values_to = "rate") |>
+  mutate(approach = factor(approach,
+           levels = c("p_anova", "p_min_tukey", "p_min_unadj"),
+           labels = c("ANOVA\n(omnibus F test)", "Tukey-adjusted\npairwise tests",
+                      "Unadjusted pairwise\nt-tests"))) |>
+  ggplot(aes(approach, rate, fill = approach)) +
+  geom_col(width = 0.6) +
+  geom_hline(yintercept = alpha, linetype = "dashed") +
+  scale_fill_manual(values = unname(pal[c("blue", "green", "vermillion")])) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 0.3)) +
+  labs(x = NULL, y = "Chance of at least one false positive") +
+  theme(legend.position = "none")
+```
+
+## Robustness checks {#sec-robust}
+
+Because the group standard deviations differed by a factor of about `r fmt_num(sd_ratio, 1)`, and with small samples normality is hard to verify, we confirm the conclusion with tests that relax these assumptions.
+
+```{r}
+#| label: robust
+welch   <- oneway.test(distance_m ~ dose_group, data = loco, var.equal = FALSE) |> tidy()
+kruskal <- kruskal.test(distance_m ~ dose_group, data = loco) |> tidy()
+gh      <- loco |> games_howell_test(distance_m ~ dose_group)
+```
+
+- **Welch's ANOVA** (no equal-variance assumption): *F*(`r welch$num.df`, `r fmt_num(welch$den.df, 1)`) = `r fmt_num(welch$statistic)`, `r fmt_p(welch$p.value, md = TRUE)`.
+- **Kruskal–Wallis test** (no normality assumption): $\chi^2$(`r kruskal$parameter`) = `r fmt_num(kruskal$statistic)`, `r fmt_p(kruskal$p.value, md = TRUE)`.
+- **Games–Howell post hoc test** (pairwise follow-up without equal variances) found `r sum(gh$p.adj < alpha)` significant pair(s): `r if (sum(gh$p.adj < alpha) > 0) paste(paste(gh$group2[gh$p.adj < alpha], "vs.", gh$group1[gh$p.adj < alpha]), collapse = "; ") else "none"`.
+
+All three checks `r if (welch$p.value < alpha && kruskal$p.value < alpha) "agree with" else "do not all agree with"` the classic ANOVA, so the conclusion does not depend on the equal-variance or normality assumptions.
+
+## Results write-up {#sec-writeup}
+
+Below is how the result would be written in the Results section of a report. The numbers are inserted directly from the analysis (using inline R code), so they cannot be mistyped and they update automatically if the data change.
+
+::: {.callout-note icon=false appearance="simple"}
+### Results
+
+Forty-eight mice (12 per group) were included in the analysis. A one-way between-subjects ANOVA showed `r if (p_anova < alpha) "a significant" else "no significant"` effect of dose on distance traveled, *F*(`r df1`, `r df2`) = `r fmt_num(F_value)`, `r fmt_p(p_anova, md = TRUE)`, $\eta^2$ = `r fmt_apa(eta2$Eta2)`, 90% CI [`r fmt_apa(eta2$CI_low)`, `r fmt_apa(eta2$CI_high)`] (a `r interpret_eta_squared(eta2$Eta2, rules = "field2013")` effect). Mean distance increased with dose (Vehicle: *M* = `r fmt_num(gm("Vehicle")$M, 1)`, *SD* = `r fmt_num(gm("Vehicle")$SD, 1)`; Low: *M* = `r fmt_num(gm("Low")$M, 1)`, *SD* = `r fmt_num(gm("Low")$SD, 1)`; Medium: *M* = `r fmt_num(gm("Medium")$M, 1)`, *SD* = `r fmt_num(gm("Medium")$SD, 1)`; High: *M* = `r fmt_num(gm("High")$M, 1)`, *SD* = `r fmt_num(gm("High")$SD, 1)`; see @fig-main A). Tukey HSD comparisons showed that the High-dose group traveled `r if (hv$p.value < alpha) "significantly" else "not significantly"` farther than the Vehicle group (mean difference = `r fmt_num(hv$estimate)` m, 95% CI [`r fmt_num(hv$lower.CL)`, `r fmt_num(hv$upper.CL)`], `r fmt_p(hv$p.value, md = TRUE)`, Cohen's *d* = `r fmt_num(hv$d)`), as did the Medium-dose group (mean difference = `r fmt_num(mv$estimate)` m, 95% CI [`r fmt_num(mv$lower.CL)`, `r fmt_num(mv$upper.CL)`], `r fmt_p(mv$p.value, md = TRUE)`, *d* = `r fmt_num(mv$d)`). The Low-dose group did not differ significantly from Vehicle (`r fmt_p(lv$p.value, md = TRUE)`), and no other pairs differed (see @tbl-tukey). Welch's ANOVA and the Kruskal–Wallis test gave the same conclusion (`r fmt_p(welch$p.value, md = TRUE)` and `r fmt_p(kruskal$p.value, md = TRUE)`).
+:::
+
+## Conclusions and limitations {#sec-conclusions}
+
+**Conclusion.** `r if (p_anova < alpha) "The data provide evidence that the dose of the drug affects locomotor activity: mice given the higher doses traveled farther than vehicle-treated mice, and mean distance increased with dose." else "The data do not provide sufficient evidence that dose affects locomotor activity. This does not show that the drug has no effect; the study may have been too small to detect a modest one."` The effect was `r interpret_eta_squared(eta2$Eta2, rules = "field2013")` in size, but its confidence interval was wide, and the study had little power to detect smaller effects.
+
+::: {.callout-warning}
+## Re-read the interpretation if your data change
+The numbers and the significant/not-significant wording above update automatically, but the *scientific interpretation* does not. If you change the data or the analysis, re-read this section and revise it in your own words.
+:::
+
+**Limitations.**
+
+- **Sample size.** With `r n_per_group` mice per group, power for a medium effect was only about `r round(100 * power_medium)`%. The effect size estimate is imprecise and, being significant, may be an overestimate.
+- **Pairwise comparisons.** Non-significant pairs (for example, Low vs. Vehicle) do not show that those doses have no effect, only that this study could not distinguish them.
+- **Assumptions.** The group standard deviations differed by nearly a factor of two and one mild outlier was present. Welch's ANOVA and the Kruskal–Wallis test agreed with the classic ANOVA, which supports the conclusion.
+- **Independence.** The ANOVA assumes each mouse is an independent observation. Mice housed in the same cage may behave more alike than mice in different cages. In a real study, cage should be considered in the design or analysis.
+- **Dose levels.** Only three non-zero doses were tested, so we cannot say how the response behaves between or beyond them. A regression of distance on dose (see @sec-your-turn) would treat dose as a number, not as categories, and describe the trend directly.
+- **Simulated data.** These data were generated by a computer to illustrate the methods; they carry no real biological information.
+
+# A Guide to Writing Up Results {#sec-guide}
+
+A good results paragraph lets a reader understand and check what you did without seeing your code.
+
+**Always report**
+
+1. The **sample size in each group** (and any exclusions or missing data).
+2. **Descriptive statistics for each group**: the mean and standard deviation (*M*, *SD*), in a table or in the text.
+3. The **omnibus test**: *F* with both degrees of freedom, the **exact p-value**, and an **effect size with a confidence interval** ($\eta^2$ or $\omega^2$).
+4. The **name of the post hoc method** (for example, Tukey HSD) and, for the comparisons you discuss, the **mean difference, its confidence interval, and the adjusted p-value**.
+5. A reference to your **figure or table**, with the key pattern in words (do not just repeat every number).
+
+**Style tips**
+
+- Use past tense for what you did and found ("Mean distance increased with dose…").
+- Write statistics in italics: *M*, *SD*, *F*, *p*. Do not put a zero before a p-value or $\eta^2$ (*p* = .002, not 0.002).
+- Report exact p-values rather than "p < .05"; use "*p* < .001" for very small ones.
+- Say **which** groups differ and in **which direction**. "The groups differed" is not enough.
+- Report only the post hoc comparisons you ran, and make clear that they were adjusted for multiple comparisons.
+- Never describe a non-significant pair as "the same" or "no different"; say it was "not significantly different".
+- Avoid "proves," "highly significant," or "trend toward significance."
+
+**A fill-in-the-blank template**
+
+```
+A one-way ANOVA showed [a significant / no significant] effect of [grouping
+variable] on [outcome], F(__, __) = __, p = __, eta-squared = __, 90% CI [__, __].
+[If significant:] Tukey HSD comparisons showed that [group A] (M = __, SD = __)
+[was higher / lower] than [group B] (M = __, SD = __), mean difference = __
+[units], 95% CI [__, __], adjusted p = __. [Describe the other pairs.]
+```
+
+**If the omnibus test is not significant**, report it and **stop**: running post hoc tests anyway, hoping to find a significant pair, inflates your false-positive rate. Report the effect size with its confidence interval and the sensitivity analysis (what size of effect could the study detect?) so readers can judge what the study could and could not show.
+
+# Your Turn {#sec-your-turn}
+
+Change one thing at a time, re-render, and describe in the notebook log (below) what changed and why.
+
+1. **Adjusting p-values.** Compare Tukey's adjusted p-values with unadjusted ones and with a Bonferroni correction: run `pairwise.t.test(loco$distance_m, loco$dose_group, p.adjust.method = "none")` and then with `"bonferroni"`. Which comparisons are significant under each method? Which method is most and least conservative?
+2. **Dose as a number.** Fit `lm(distance_m ~ dose_mgkg, data = loco)` and look at `summary()`. How does this model describe the dose-response relationship differently from the ANOVA? What does it assume that the ANOVA does not? (This previews the correlation and regression project.)
+3. **Sample size planning.** Use `pwr.anova.test()` to find how many mice per group you would need for 90% power at $f = 0.25$, and for 80% power at $f = 0.40$. What does this say about studying subtle effects?
+4. **More groups, more risk.** In the simulation, change the number of groups by editing the `means` vector (for example, `rep(40, 3)` and `rep(40, 6)`). How does the false-positive rate of the unadjusted pairwise t-tests change as the number of groups grows? Why?
+5. **The outlier.** Remove mouse `M06` and re-run the analysis. How much do the results change? Why must exclusions be decided *in advance* and reported, not made because a data point is inconvenient?
+6. **Equal variances.** Compare the classic ANOVA with Welch's ANOVA (`var.equal = FALSE`). How much do the F statistic and the degrees of freedom change? When would you expect a bigger difference?
+7. **Your own data.** Replace the CSV in `Data/` with a file of your own (one row per subject, one column that identifies the group, one column for the outcome), update the file and variable names, and write your own problem statement, methods, and conclusions.
+8. **Interpretation.** Rewrite the Conclusion paragraph in your own words. What would you do next to follow up on this finding?
+
+# Notebook Log {#sec-log}
+
+Keep a running record of decisions so that you (and your instructor) can see how the analysis developed. Add a row whenever you change something.
+
+```{r}
+#| label: tbl-log
+#| tbl-cap: "Analysis decision log (edit the rows below)"
+tribble(
+  ~Date,          ~`Decision or change`,                                   ~Reason,
+  "YYYY-MM-DD",   "Chose one-way ANOVA with Tukey HSD follow-up, α = .05", "Four independent groups; all six pairwise comparisons of interest",
+  "YYYY-MM-DD",   "Kept mouse M06 (mild outlier)",                         "Not extreme and no evidence of error; Welch and Kruskal-Wallis checks agree",
+  "",             "",                                                      ""
+) |>
+  pub_table(align = "lll")
+```
+
+# Reproducibility {#sec-repro}
+
+The R and package versions used to create this notebook are listed below.
+
+```{r}
+#| label: session-info
+sessionInfo()
+```
