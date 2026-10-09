@@ -143,7 +143,7 @@ tribble(
 **Power** is the probability that your study will detect an effect of a given size if it is real. Too few animals and you are likely to miss a real effect (Type II error); the animals you do use are then wasted. Choose the **smallest effect you would consider scientifically meaningful**, or take an estimate from a pilot study or the published literature (published effects from small studies tend to be exaggerated, so be conservative). Then calculate how many animals you need. Do **not** calculate "power" from the effect you observed after the study; it adds no information.
 :::
 
-Edit the settings in the chunk below to match your design, then render. **The values shown are only an example.** Notes: for a **paired** design the effect size is $d_z$, the mean of the within-animal differences divided by the SD of those differences; the ANOVA option is for a **one-way** design (for a 2 × 2 design see `power_2x2()` in the `twoway_anova` project); and the tail setting applies to t-tests and correlations only.
+Edit the settings in the chunk below to match your design, then render. **The values shown are only an example.** Notes: for a **paired** design the effect size is $d_z$, the mean of the within-animal differences divided by the SD of those differences (the `paired_t_test` project explains how this differs from the *d* of a two-sample study); the ANOVA option is for a **one-way** design (for a 2 × 2 design see `power_2x2()` in the `twoway_anova` project); and the tail setting applies to t-tests and correlations only.
 
 ```{r}
 #| label: power-settings

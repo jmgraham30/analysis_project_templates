@@ -200,7 +200,7 @@ Try each scenario yourself before opening the answer. Always ask: *what is the i
 
 ::: {.callout-note collapse="true"}
 ## 1. Locomotion in 12 mice measured before and after an amphetamine injection
-**Paired t-test** on the 12 differences (after − before), because the same mice were measured twice. If the differences are clearly non-normal, use the Wilcoxon signed-rank test. A two-sample t-test would be wrong: it ignores the pairing and throws away power.
+**Paired t-test** on the 12 differences (after − before), because the same mice were measured twice. If the differences are clearly non-normal, use the Wilcoxon signed-rank test. A two-sample t-test would be wrong: it ignores the pairing and throws away power. (The `paired_t_test` project works through this.)
 :::
 
 ::: {.callout-note collapse="true"}
