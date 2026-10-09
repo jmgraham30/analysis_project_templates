@@ -1,25 +1,752 @@
 ---
-title: "Untitled"
-format: html
+title: "How Typical Is Typical? Measures of Central Tendency and Variability"
+subtitle: "Lab notebook template: describing the center, spread, and shape of data"
+author: "Your Name"
+date: today
+date-format: "MMMM D, YYYY"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: true
+    code-fold: show
+    code-tools: true
+    embed-resources: true
+    smooth-scroll: true
+    fig-width: 6.5
+    fig-height: 4.2
+    fig-dpi: 300
+    fig-align: center
+    tbl-cap-location: top
+execute:
+  echo: true
+  warning: false
+  message: false
 ---
 
-## Quarto
+::: {.callout-note icon=false}
+## How to use this notebook
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+This is a **template lab notebook** that walks through a complete descriptive analysis: a question, a plan, the data, the code, and a written report of the results. To make it yours:
 
-## Running Code
+1. Open `measures_tendency_variability.Rproj` first (so RStudio uses this folder as the working directory).
+2. Replace `Your Name` in the header above with your name.
+3. Click **Render** to build the notebook. Every number, table, and figure is regenerated from the data and code. (The notebook runs some simulations, so rendering takes a few seconds longer than you might expect.)
+4. Read the text, then change things and re-render to see what happens (see @sec-your-turn).
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+The data are **simulated** for teaching purposes. No animals were tested.
+:::
+
+| Notebook details | |
+|:--|:--|
+| **Project** | Measures of central tendency, variability, and shape (descriptive statistics) |
+| **Data file** | `Data/neuron_firing.csv` |
+| **Analysis script** | `R/02_analysis.R` (same analysis, with extra teaching comments) |
+| **Helper code** | `R/00_setup.R` (packages, plot theme, formatting helpers, and functions for SE, CV, mode, skewness, kurtosis, and confidence intervals) |
+| **Software** | `r R.version.string`; Quarto |
 
 ```{r}
-1 + 1
+#| label: setup
+# Load packages, the plot theme, and helper functions (see R/00_setup.R)
+source("R/00_setup.R")
 ```
 
-You can add options to executable code like this 
+# Problem Statement and Goals {#sec-problem}
+
+## Background
+
+Whenever we measure many things (neurons, mice, trials), we get many numbers, and nobody can read a column of 120 values. **Descriptive statistics** squeeze the numbers into a few that answer two basic questions:
+
+- **Central tendency:** What is a *typical* value? (mean, median, mode)
+- **Variability:** How much do the values *differ* from one another? (range, interquartile range, variance, standard deviation)
+
+Every statistic is a summary, and a summary can mislead if it does not fit the data. The mean is the natural summary for symmetric data and a poor one for skewed data; the standard deviation describes the spread of the data, but the standard error describes something entirely different. This notebook shows how to choose, compute, and report the right summaries, using extracellular recordings from **120 neurons** in three brain regions (somatosensory cortex, hippocampus, and striatum), recorded in 12 mice.
+
+## Problem statement and guiding questions
+
+> **How can we describe the firing rates and spike widths of these neurons honestly: what is typical, how much do neurons differ, and how precisely do we know the average?**
+
+1. What kind of variable is each measurement (nominal, ordinal, or ratio), and which summaries does that allow?
+2. What is a "typical" firing rate? Do the mean, median, and geometric mean agree? If not, why?
+3. How variable are the neurons? How does the variability depend on the brain region?
+4. How do extreme values affect each statistic?
+5. What is the difference between the **standard deviation** and the **standard error**, and how precisely is the average firing rate known?
+
+::: {.callout-important}
+## No hypothesis tests in this notebook
+These are **descriptive** questions about this sample. Hypothesis tests, effect sizes, power, and Type I and Type II errors are covered in the later projects (t-tests, ANOVA, chi-square). But they all *build on* the ideas here: a test statistic compares a difference to the **variability** (the standard error), and **confidence intervals** are the first step from describing a sample to making statements about the population. The simulations in @sec-sim show these ideas at work, including the long-run "error rate" of a confidence interval.
+:::
+
+# Methods {#sec-methods}
+
+## Subjects and recordings
+
+Extracellular recordings were made from **120 single neurons** in 12 adult mice: 40 neurons from each of three regions (somatosensory cortex, hippocampus, and striatum), with 10 neurons per mouse and 4 mice per region. For each neuron, the **average firing rate** (spikes per second) was computed over a recording session, and the **spike width** (the duration of the average spike waveform) was measured. A trained observer also classified each neuron as **regular spiking** (usually excitatory) or **fast spiking** (usually inhibitory) and rated how clearly it responded to a stimulus on a 1 to 5 scale. *(Simulated data for teaching. In a real notebook, give the species/strain, age, electrode type, recording and spike-sorting methods, session duration, and the approval number of your animal-care protocol.)*
+
+## Data description {#sec-data}
+
+The raw data are stored in `Data/neuron_firing.csv` (one row per neuron). The raw file is **never edited by hand**: all calculations are done in code so they are documented and repeatable.
 
 ```{r}
-#| echo: false
-2 * 2
+#| label: tbl-dictionary
+#| tbl-cap: "Variables in the raw data file, and their scales of measurement"
+tribble(
+  ~Variable,          ~Description,                                           ~Scale,                 ~`Appropriate center`,        ~`Appropriate spread`,
+  "neuron_id",        "Unique neuron identifier (N001–N120)",                 "Identifier",           "none",                       "none",
+  "mouse_id",         "Mouse the neuron was recorded from (M01–M12)",         "Identifier",           "none",                       "none",
+  "region",           "Cortex, Hippocampus, or Striatum",                     "Nominal",              "Mode",                       "Counts, percentages",
+  "cell_type",        "Regular spiking or Fast spiking",                      "Nominal",              "Mode",                       "Counts, percentages",
+  "tuning_rating",    "Clarity of the response, 1 (none) to 5 (very clear)",   "Ordinal",              "Median (mode)",              "IQR, range",
+  "firing_rate_hz",   "Average firing rate (spikes per second)",              "Ratio (true zero)",    "Mean, median, geometric mean", "SD, IQR, MAD, CV",
+  "spike_width_ms",   "Width of the average spike waveform (milliseconds)",   "Ratio (true zero)",    "Mean, median",               "SD, IQR, MAD"
+) |>
+  pub_table(align = "lllll")
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+The **scale of measurement** decides which statistics make sense. *Nominal* data are categories with no order, so only counts and the mode make sense (the "average" region is meaningless). *Ordinal* data have an order, but the gaps between categories need not be equal, so we use the median and quartiles. *Interval and ratio* data are true measurements, so means and standard deviations are possible; the ratio scale also has a meaningful zero (a firing rate of 0 means no spikes), which allows ratios such as "twice as fast".
+
+```{r}
+#| label: import
+conf_level <- 0.95      # confidence level for intervals
+trim       <- 0.10      # fraction trimmed from EACH end for the trimmed mean
+
+neurons_raw <- read_csv(here("Data", "neuron_firing.csv"), show_col_types = FALSE)
+glimpse(neurons_raw)
+```
+
+```{r}
+#| label: checks
+tibble(
+  `Rows`                    = nrow(neurons_raw),
+  `Missing values`          = sum(is.na(neurons_raw)),
+  `Duplicated neuron IDs`   = sum(duplicated(neurons_raw$neuron_id))
+) |>
+  pub_table(align = "ccc")
+```
+
+Categorical variables should be **factors** with the levels in a meaningful order. An *ordered* factor tells R that `tuning_rating` is ordinal.
+
+```{r}
+#| label: prepare
+neurons <- neurons_raw |>
+  mutate(
+    region    = factor(region, levels = c("Cortex", "Hippocampus", "Striatum")),
+    cell_type = factor(cell_type, levels = c("Regular spiking", "Fast spiking")),
+    tuning_rating = factor(tuning_rating, levels = 1:5, ordered = TRUE)
+  )
+
+N     <- nrow(neurons)
+rate  <- neurons$firing_rate_hz      # shorthand for the two main variables
+width <- neurons$spike_width_ms
+```
+
+The data set contains **N = `r N`** neurons with no missing values.
+
+# Statistical Analysis Plan {#sec-stats}
+
+## Planned analysis
+
+- **Choose each summary to match the variable's scale and shape** (@tbl-dictionary), and always **look at the distribution first** (histogram, Q-Q plot).
+- **Central tendency.** Mean ($\bar{x} = \frac{1}{n}\sum x_i$), median (the middle value), the 10% **trimmed mean**, the **geometric mean** ($\exp(\overline{\ln x})$, for positive skewed data), and the **mode**.
+- **Variability.** Range, **interquartile range** (IQR = Q3 − Q1), **variance** and **standard deviation**
+$$s^2 = \frac{\sum_{i=1}^{n}(x_i - \bar{x})^2}{n - 1}, \qquad s = \sqrt{s^2},$$
+the **median absolute deviation** (MAD), and the **coefficient of variation** ($CV = s / \bar{x}$).
+- **Shape.** Skewness (0 for a symmetric distribution; positive when the right tail is longer) and excess kurtosis (0 for a normal distribution; positive for heavier tails).
+- **Precision of the mean.** The **standard error** $SE = s / \sqrt{n}$ and a **95% confidence interval** $\bar{x} \pm t^* \times SE$, plus alternatives for skewed data (the geometric mean's CI and a **bootstrap** CI for the median).
+- **Outliers.** Values beyond 1.5 × IQR from the quartiles are *flagged* (the rule box plots use). They are **not deleted**: we report statistics with and without a hypothetical extreme value to show how sensitive each statistic is.
+- **Reporting.** Always report $n$, and say whether an error bar shows the SD, the SE, or a confidence interval.
+- **Simulations.** To see *why* the formulas are what they are: why we divide by $n - 1$, how the sampling distribution of the mean behaves, and how often a 95% confidence interval contains the truth.
+- **Software.** Analyses were run in `r R.version.string` using the tidyverse, `here`, and `patchwork`.
+
+# Results and Conclusions {#sec-results}
+
+## Categorical variables: counts, the mode, and the median {#sec-categorical}
+
+For **nominal** data, we count. The only "average" is the **mode**, the most common category.
+
+```{r}
+#| label: tbl-nominal
+#| tbl-cap: "Counts and percentages of neurons by cell type and by region"
+bind_rows(
+  count(neurons, Variable = "Cell type", Category = as.character(cell_type)),
+  count(neurons, Variable = "Region", Category = as.character(region))
+) |>
+  group_by(Variable) |>
+  mutate(Percent = fmt_num(100 * n / sum(n), 1)) |>
+  ungroup() |>
+  rename(`n` = n) |>
+  pub_table(align = "llcc")
+```
+
+The mode of cell type is **`r mode_cat(neurons$cell_type)`** (`r sum(neurons$cell_type == mode_cat(neurons$cell_type))` of `r N` neurons). For **ordinal** data, the median and quartiles are appropriate (we convert the ordered categories to their ranks to find the middle):
+
+```{r}
+#| label: ordinal
+rating_num <- as.integer(neurons$tuning_rating)
+rating_q   <- quantile(rating_num, c(0.25, 0.5, 0.75))
+```
+
+The median tuning rating is **`r rating_q[2]`** (IQR `r rating_q[1]` to `r rating_q[3]`; mode: `r paste(mode_cat(neurons$tuning_rating), collapse = " and ")`). We do not report a mean rating, because we cannot be sure that the step from a rating of 1 to 2 is the same size as from 4 to 5.
+
+## Look at the shape first {#sec-shape}
+
+The right summary depends on the **shape** of the distribution, so we always plot before we summarize.
+
+```{r}
+#| label: fig-dist
+#| fig-cap: "Distributions of (A) firing rate and (B) spike width for all 120 neurons."
+#| fig-alt: "Two histograms. Panel A, firing rate, has most neurons below 10 spikes per second and a long tail of a few neurons at 20 to 40 spikes per second. Panel B, spike width, is more symmetric, centered around 0.4 milliseconds, with a smaller group of narrow spikes below 0.3 milliseconds."
+#| fig-width: 8
+#| fig-height: 3.6
+p_hist_rate <- ggplot(neurons, aes(firing_rate_hz)) +
+  geom_histogram(binwidth = 2, fill = pal["blue"], color = "white") +
+  labs(x = "Firing rate (spikes/s)", y = "Number of neurons")
+
+p_hist_width <- ggplot(neurons, aes(spike_width_ms)) +
+  geom_histogram(binwidth = 0.04, fill = pal["orange"], color = "white") +
+  labs(x = "Spike width (ms)", y = "Number of neurons")
+
+p_hist_rate + p_hist_width + plot_annotation(tag_levels = "A")
+```
+
+The two variables look very different. **Firing rate is right-skewed**: most neurons fire slowly, and a few fire very fast, giving a long right tail. That is typical of positive, ratio-scale measurements. **Spike width is much more symmetric**, apart from a small group of narrow spikes (the fast-spiking cells).
+
+## Measures of central tendency {#sec-center}
+
+```{r}
+#| label: center
+center_stats <- function(v) {
+  dens <- density(v, from = min(v), to = max(v))
+  tibble(
+    Mean            = mean(v),
+    Median          = median(v),
+    `Trimmed mean`  = mean(v, trim = trim),
+    `Geometric mean` = exp(mean(log(v))),
+    `Mode (density peak)` = dens$x[which.max(dens$y)]
+  )
+}
+center_rate  <- center_stats(rate)
+center_width <- center_stats(width)
+```
+
+```{r}
+#| label: tbl-center
+#| tbl-cap: "Measures of central tendency"
+bind_rows(`Firing rate (spikes/s)` = center_rate, `Spike width (ms)` = center_width,
+          .id = "Variable") |>
+  mutate(across(-Variable, ~ fmt_num(.x, 2))) |>
+  pub_table(align = "lccccc")
+```
+
+- **Firing rate.** The mean (`r fmt_num(center_rate$Mean, 1)` spikes/s) is **much larger** than the median (`r fmt_num(center_rate$Median, 1)`). Half of all neurons fire slower than `r fmt_num(center_rate$Median, 1)` spikes/s, but the few very fast neurons pull the mean up to `r fmt_num(center_rate$Mean, 1)`. The 10% trimmed mean (`r fmt_num(center_rate[["Trimmed mean"]], 1)`) and the geometric mean (`r fmt_num(center_rate[["Geometric mean"]], 1)`) lie in between. Which is "typical"? For skewed data, the **median** (or geometric mean) is closer to what most neurons do.
+- **Spike width.** The mean (`r fmt_num(center_width$Mean, 3)` ms) and median (`r fmt_num(center_width$Median, 3)` ms) are close, as expected for a nearly symmetric distribution. Either describes a typical neuron.
+
+```{r}
+#| label: fig-center
+#| fig-cap: "Firing rates with the mean, median, and geometric mean marked. In skewed data the mean is pulled to the right of the median."
+#| fig-alt: "Histogram of firing rates with three vertical lines. The median (blue, solid) and geometric mean (green, dotted) are near 3 to 4 spikes per second, close to the peak of the histogram. The mean (vermillion, dashed) is further right at about 6.5 spikes per second."
+#| fig-width: 6.5
+#| fig-height: 4
+ggplot(neurons, aes(firing_rate_hz)) +
+  geom_histogram(binwidth = 2, fill = "gray85", color = "white") +
+  geom_vline(data = pivot_longer(center_rate, c(Mean, Median, `Geometric mean`),
+                                 names_to = "statistic", values_to = "value"),
+             aes(xintercept = value, color = statistic, linetype = statistic), linewidth = 1.1) +
+  scale_color_manual(values = c(Mean = unname(pal["vermillion"]), Median = unname(pal["blue"]),
+                                `Geometric mean` = unname(pal["green"]))) +
+  scale_linetype_manual(values = c(Mean = "dashed", Median = "solid", `Geometric mean` = "dotted")) +
+  labs(x = "Firing rate (spikes/s)", y = "Number of neurons", color = NULL, linetype = NULL)
+```
+
+::: {.callout-tip}
+## Mean, median, or mode?
+- **Symmetric, no outliers** → the **mean** (it uses all the data and has the best statistical properties).
+- **Skewed or with outliers** → the **median** (and the geometric mean for positive, right-skewed data).
+- **Categories** → the **mode**.
+- **Check both.** If the mean and median differ noticeably, the data are skewed, and that is worth saying.
+:::
+
+## Measures of variability {#sec-spread}
+
+```{r}
+#| label: spread
+spread_stats <- function(v) {
+  tibble(
+    n      = length(v),
+    Min    = min(v), Max = max(v), Range = max(v) - min(v),
+    Q1     = quantile(v, 0.25), Q3 = quantile(v, 0.75), IQR = IQR(v),
+    Variance = var(v), SD = sd(v),
+    MAD    = mad(v),
+    CV     = cv(v),
+    SE     = se(v)
+  )
+}
+spread_rate  <- spread_stats(rate)
+spread_width <- spread_stats(width)
+```
+
+```{r}
+#| label: tbl-spread
+#| tbl-cap: "Measures of variability"
+bind_rows(`Firing rate (spikes/s)` = spread_rate, `Spike width (ms)` = spread_width,
+          .id = "Variable") |>
+  pivot_longer(-Variable, names_to = "Statistic", values_to = "value") |>
+  pivot_wider(names_from = Variable, values_from = value) |>
+  mutate(across(-Statistic, ~ if_else(Statistic == "n", as.character(.x), fmt_num(.x, 3)))) |>
+  pub_table(align = "lcc")
+```
+
+How to read these:
+
+- The **range** (`r fmt_num(spread_rate$Range, 1)` spikes/s) depends only on the two most extreme neurons, and it tends to grow as more neurons are recorded, so it is a poor summary.
+- The **IQR** (`r fmt_num(spread_rate$IQR, 1)` spikes/s) is the spread of the middle half of the neurons and is not affected by the extremes.
+- The **SD** (`r fmt_num(spread_rate$SD, 1)` spikes/s) is the typical distance of a neuron from the mean, in the units of the data. Here it is **larger than the median** firing rate, a sign of strong skew. For skewed data, "mean ± SD" can even suggest impossible values (a negative firing rate), so report the **median and IQR** instead.
+- The **MAD** is a robust alternative to the SD (scaled to equal the SD for normal data); it is `r fmt_num(spread_rate$MAD, 1)` here, much smaller than the SD (`r fmt_num(spread_rate$SD, 1)`).
+- The **coefficient of variation** is the SD as a fraction of the mean: **`r fmt_num(spread_rate$CV, 2)`** for firing rate and **`r fmt_num(spread_width$CV, 2)`** for spike width. Because it has no units, it lets us compare the variability of measures on different scales: firing rates vary much more, relative to their mean, than spike widths.
+- The **variance** is the SD squared (so its units are squared); we use it mostly because it is mathematically convenient.
+
+**The SD by hand.** The SD is built from every neuron's distance from the mean:
+
+```{r}
+#| label: sd-by-hand
+dev         <- rate - mean(rate)                 # each neuron's deviation from the mean
+ss          <- sum(dev^2)                        # sum of squared deviations
+var_by_hand <- ss / (length(rate) - 1)           # divide by n - 1 (see @sec-sim)
+c(`SD by hand` = sqrt(var_by_hand), `sd() function` = sd(rate))
+```
+
+## Shape: skewness, kurtosis, and the log transformation {#sec-skew}
+
+```{r}
+#| label: shape
+shape_tbl <- tibble(
+  Variable = c("Firing rate (spikes/s)", "Spike width (ms)", "log(Firing rate)"),
+  Skewness = c(skew(rate), skew(width), skew(log(rate))),
+  `Excess kurtosis` = c(kurt(rate), kurt(width), kurt(log(rate)))
+)
+```
+
+```{r}
+#| label: tbl-shape
+#| tbl-cap: "Skewness and excess kurtosis"
+shape_tbl |>
+  mutate(across(-Variable, ~ fmt_num(.x, 2))) |>
+  pub_table(align = "lcc")
+```
+
+Firing rate has **strong positive skew** (`r fmt_num(shape_tbl$Skewness[1], 2)`; a rough guide is that values beyond ±1 indicate strong skew) and heavy tails (excess kurtosis `r fmt_num(shape_tbl[["Excess kurtosis"]][1], 1)`). Spike width is mildly skewed to the left (`r fmt_num(shape_tbl$Skewness[2], 2)`) because of the fast-spiking cells. Taking the **logarithm** of the firing rates makes them much more symmetric (skewness `r fmt_num(shape_tbl$Skewness[3], 2)`), which is why many analyses of positive, skewed data are done on the log scale.
+
+```{r}
+#| label: fig-qq
+#| fig-cap: "Normal Q-Q plots of (A) firing rate and (B) log of firing rate. Points close to the line indicate a distribution close to normal."
+#| fig-alt: "Two normal Q-Q plots. Panel A, raw firing rate, has points curving sharply upward away from the line at the right end. Panel B, log firing rate, has points close to the straight line."
+#| fig-width: 7
+#| fig-height: 3.5
+p_qq1 <- ggplot(neurons, aes(sample = firing_rate_hz)) +
+  stat_qq(color = pal["blue"]) + stat_qq_line() +
+  labs(title = "Firing rate", x = "Theoretical quantiles", y = "Sample quantiles")
+p_qq2 <- ggplot(neurons, aes(sample = log(firing_rate_hz))) +
+  stat_qq(color = pal["blue"]) + stat_qq_line() +
+  labs(title = "log(Firing rate)", x = "Theoretical quantiles", y = "Sample quantiles")
+p_qq1 + p_qq2 + plot_annotation(tag_levels = "A")
+```
+
+For log-normal data, the **geometric mean** (`r fmt_num(exp(mean(log(rate))), 1)` spikes/s) is the natural "typical" value, and the **geometric SD** (`r fmt_num(exp(sd(log(rate))), 1)`) describes the spread *multiplicatively*: a typical neuron fires within a factor of about `r fmt_num(exp(sd(log(rate))), 1)` of the geometric mean.
+
+## Outliers and robustness {#sec-outliers}
+
+Some neurons fire much faster than the rest. The **1.5 × IQR rule** flags values far from the quartiles.
+
+```{r}
+#| label: outliers
+q <- quantile(rate, c(0.25, 0.75))
+fence_hi <- q[2] + 1.5 * IQR(rate)
+flagged  <- neurons |>
+  filter(firing_rate_hz > fence_hi) |>
+  select(neuron_id, region, cell_type, firing_rate_hz) |>
+  arrange(desc(firing_rate_hz))
+```
+
+`r nrow(flagged)` neurons (`r fmt_num(100 * nrow(flagged) / N, 0)`%) exceed the upper fence of `r fmt_num(fence_hi, 1)` spikes/s. `r sum(flagged$cell_type == "Fast spiking")` of them are fast-spiking cells, which are *expected* to fire fast. These are real, plausible values, so they are **kept**. A value should be removed only when there is a documented reason to believe it is an *error* (see the data organization project), never just because it is extreme.
+
+To see **how sensitive each statistic is**, suppose a recording artifact had added one extra "neuron" with an extreme firing rate. We recompute the statistics with one added value from 0 to 200 spikes/s.
+
+```{r}
+#| label: sens
+artifact_values <- c(0, 10, 25, 50, 100, 200)
+sens <- map(artifact_values, function(a) {
+  v <- c(rate, a)
+  tibble(artifact = a, mean = mean(v), sd = sd(v), median = median(v), iqr = IQR(v))
+}) |> list_rbind()
+```
+
+```{r}
+#| label: tbl-sens
+#| tbl-cap: "Statistics for the firing rates after adding one extra value (spikes/s)"
+sens |>
+  rename(`Added value` = artifact, Mean = mean, SD = sd, Median = median, IQR = iqr) |>
+  pub_table(digits = 2, align = "ccccc")
+```
+
+```{r}
+#| label: fig-sens
+#| fig-cap: "Sensitivity of each statistic to one extreme added value. The mean and SD (left: mean; right: SD, dashed) change a lot, while the median and IQR barely change."
+#| fig-alt: "Two panels. In the Center panel, the mean rises steadily from about 6.5 to about 8.2 spikes per second as the added value increases to 200, while the median stays flat near 3.3. In the Spread panel, the SD rises steeply from about 7.5 to about 19 while the IQR stays flat near 6.5."
+#| fig-width: 8
+#| fig-height: 4
+sens |>
+  pivot_longer(-artifact, names_to = "statistic", values_to = "value") |>
+  mutate(group = if_else(statistic %in% c("mean", "median"), "Center", "Spread"),
+         statistic = factor(statistic, levels = c("mean", "median", "sd", "iqr"),
+                            labels = c("Mean", "Median", "SD", "IQR"))) |>
+  ggplot(aes(artifact, value, color = statistic, linetype = statistic, shape = statistic)) +
+  geom_line(linewidth = 1) + geom_point(size = 2.5) +
+  facet_wrap(~ group, scales = "free_y") +
+  scale_color_manual(values = unname(pal[c("vermillion", "blue", "vermillion", "blue")])) +
+  scale_linetype_manual(values = c("solid", "solid", "dashed", "dashed")) +
+  labs(x = "Value of one added extreme observation (spikes/s)", y = "Statistic (spikes/s)",
+       color = NULL, linetype = NULL, shape = NULL)
+```
+
+Adding a single extreme value (200 spikes/s) raised the mean from `r fmt_num(sens$mean[1], 1)` to `r fmt_num(sens$mean[6], 1)` and **more than doubled the SD** (from `r fmt_num(sens$sd[1], 1)` to `r fmt_num(sens$sd[6], 1)`), while the median (`r fmt_num(sens$median[1], 2)` to `r fmt_num(sens$median[6], 2)`) and the IQR (`r fmt_num(sens$iqr[1], 2)` to `r fmt_num(sens$iqr[6], 2)`) hardly moved. Statistics that resist extreme values are called **robust**. The median and the IQR are robust; the mean and the SD are not.
+
+## Summaries by group {#sec-groups}
+
+```{r}
+#| label: group-stats
+group_tbl <- neurons |>
+  group_by(region) |>
+  summarize(
+    n = n(),
+    mean = mean(firing_rate_hz), sd = sd(firing_rate_hz),
+    median = median(firing_rate_hz), q1 = quantile(firing_rate_hz, .25),
+    q3 = quantile(firing_rate_hz, .75),
+    geo_mean = exp(mean(log(firing_rate_hz))), cv = cv(firing_rate_hz),
+    sd_log = sd(log(firing_rate_hz))
+  )
+```
+
+```{r}
+#| label: tbl-groups
+#| tbl-cap: "Firing rate (spikes/s) by brain region"
+group_tbl |>
+  transmute(
+    Region = region, n,
+    `Median [IQR]` = paste0(fmt_num(median, 1), " [", fmt_num(q1, 1), ", ", fmt_num(q3, 1), "]"),
+    `Mean (SD)` = paste0(fmt_num(mean, 1), " (", fmt_num(sd, 1), ")"),
+    `Geometric mean` = fmt_num(geo_mean, 1),
+    CV = fmt_num(cv, 2),
+    `SD of log(rate)` = fmt_num(sd_log, 2)
+  ) |>
+  pub_table(align = "lcccccc")
+```
+
+```{r}
+#| label: fig-groups
+#| fig-cap: "Firing rate by brain region on (A) a linear scale and (B) a logarithmic scale. Each point is one neuron; boxes show the median and interquartile range; white diamonds mark the mean."
+#| fig-alt: "Two panels showing firing rate by region (cortex, hippocampus, striatum). Panel A, linear scale, shows the striatum with the highest and most spread-out firing rates, the hippocampus the lowest and tightest, with white diamonds for the means above the medians. Panel B, log scale, shows the three regions with similar spread."
+#| fig-width: 8
+#| fig-height: 4
+fig_groups <- ggplot(neurons, aes(region, firing_rate_hz, color = region, shape = region)) +
+  geom_jitter(width = 0.12, height = 0, size = 2, alpha = 0.7) +
+  geom_boxplot(width = 0.35, outlier.shape = NA, color = "gray30", fill = NA) +
+  stat_summary(fun = mean, geom = "point", shape = 23, size = 3.5, fill = "white", color = "black") +
+  scale_color_manual(values = unname(pal[c("blue", "orange", "green")])) +
+  labs(x = "Brain region", y = "Firing rate (spikes/s)") +
+  theme(legend.position = "none")
+
+fig_groups_log <- fig_groups +
+  scale_y_log10(breaks = c(0.5, 1, 2, 5, 10, 20, 40)) +
+  labs(y = "Firing rate (spikes/s, log scale)")
+
+fig_groups + fig_groups_log + plot_annotation(tag_levels = "A")
+```
+
+Two features of @tbl-groups are typical of skewed, ratio-scale data. First, in every region the **mean is larger than the median**. Second, the **SD is larger where the mean is larger** (striatum: SD `r fmt_num(group_tbl$sd[group_tbl$region == "Striatum"], 1)`; hippocampus: SD `r fmt_num(group_tbl$sd[group_tbl$region == "Hippocampus"], 1)`), so the groups differ in spread as well as in center. But the **CV** is almost the same in every region (`r fmt_num(min(group_tbl$cv), 2)` to `r fmt_num(max(group_tbl$cv), 2)`), and on the **log scale** (@fig-groups B) the spreads look similar (SD of log rate: `r fmt_num(min(group_tbl$sd_log), 2)` to `r fmt_num(max(group_tbl$sd_log), 2)`). That is the signature of a *multiplicative* process: regions differ by a constant **factor** rather than by a constant amount. Equal spread across groups is an assumption of many tests (t-tests and ANOVA, later in the course), and a log transformation is a common way to meet it.
+
+## Precision of the mean: SD versus SE, and confidence intervals {#sec-se}
+
+The SD and the **standard error (SE)** are easy to confuse, but they answer different questions.
+
+```{r}
+#| label: tbl-sd-se
+#| tbl-cap: "Standard deviation versus standard error"
+tribble(
+  ~Statistic, ~`What it describes`,                                   ~`Depends on n?`,                         ~`Use it to`,
+  "SD",       "How much the individual neurons differ from each other", "No. It estimates a fixed population value", "Describe the data and their spread",
+  "SE",       "How much the sample mean would vary from sample to sample", "Yes. It shrinks as n grows (SE = SD / √n)", "Say how precisely the mean is estimated; build confidence intervals"
+) |>
+  pub_table(align = "llll")
+```
+
+A **95% confidence interval (CI)** for the mean is $\bar{x} \pm t^* \times SE$. For these data, the SE of the mean firing rate is `r fmt_num(spread_rate$SE, 2)` spikes/s, far smaller than the SD (`r fmt_num(spread_rate$SD, 2)`), because the mean of 120 neurons is much more precise than any one neuron.
+
+```{r}
+#| label: ci
+mean_overall <- mean_ci(rate, conf_level)
+geo_ci       <- mean_ci(log(rate), conf_level) |> mutate(across(c(mean, lower, upper), exp))
+
+group_ci <- neurons |>
+  group_by(region) |>
+  reframe(mean_ci(firing_rate_hz, conf_level), sd = sd(firing_rate_hz), se = se(firing_rate_hz))
+
+# A bootstrap CI for the median: re-sample the data with replacement many times,
+# compute the median each time, and take the middle 95% of the results.
+set.seed(123)
+B <- 5000
+boot_medians <- replicate(B, median(sample(rate, replace = TRUE)))
+boot_ci <- quantile(boot_medians, c(0.025, 0.975))
+```
+
+```{r}
+#| label: tbl-ci
+#| tbl-cap: "95% confidence intervals for the typical firing rate (spikes/s), by three methods"
+tribble(
+  ~Statistic,        ~Estimate,                          ~`95% CI`,                                                                     ~Method,
+  "Mean",            fmt_num(mean_overall$mean, 2),      paste0("[", fmt_num(mean_overall$lower, 2), ", ", fmt_num(mean_overall$upper, 2), "]"), "t interval (assumes a roughly normal sampling distribution)",
+  "Geometric mean",  fmt_num(geo_ci$mean, 2),            paste0("[", fmt_num(geo_ci$lower, 2), ", ", fmt_num(geo_ci$upper, 2), "]"),           "t interval on the log scale, back-transformed",
+  "Median",          fmt_num(median(rate), 2),           paste0("[", fmt_num(boot_ci[1], 2), ", ", fmt_num(boot_ci[2], 2), "]"),               paste0("Bootstrap (", format(B, big.mark = ","), " re-samples)")
+) |>
+  pub_table(align = "lccl")
+```
+
+Each interval answers a *different* question, because each is about a different statistic: the CI of the mean is about the arithmetic mean (`r fmt_num(mean_overall$mean, 1)`), the CI of the geometric mean about the typical neuron on a multiplicative scale (`r fmt_num(geo_ci$mean, 1)`), and the bootstrap CI about the median (`r fmt_num(median(rate), 1)`). For skewed data, the intervals for the geometric mean and the median are more informative about a *typical* neuron than the interval for the mean.
+
+```{r}
+#| label: tbl-group-ci
+#| tbl-cap: "Mean firing rate (spikes/s) by region, with SD, SE, and 95% CI"
+group_ci |>
+  transmute(Region = region, n, Mean = fmt_num(mean, 2), SD = fmt_num(sd, 2), SE = fmt_num(se, 2),
+            `95% CI` = paste0("[", fmt_num(lower, 2), ", ", fmt_num(upper, 2), "]")) |>
+  pub_table(align = "lccccc")
+```
+
+::: {.callout-warning}
+## Neurons from the same mouse are not independent
+All the formulas above (the SE, the CI) assume that each observation is independent. But the 10 neurons recorded from one mouse share that mouse's brain, age, and state, so they tend to be more alike than neurons from different mice. This is **pseudoreplication**: counting neurons as if they were separate animals makes the SE too small and the CI too narrow. For real recordings, analyze the data at the level of the mouse (for example, average each mouse's neurons first), or use a statistical model that accounts for the nesting. This simulated data set has no mouse-to-mouse differences, so the problem is hidden here. See @sec-your-turn.
+:::
+
+## Simulations: why the formulas are what they are {#sec-sim}
+
+A simulation lets us **know the truth** (we choose the population) and repeat an experiment thousands of times. We use simulations to answer three questions.
+
+### Why divide by $n - 1$?
+
+The sample variance divides the sum of squared deviations by $n - 1$, not $n$. To see why, we draw 10,000 small samples ($n = 5$) from a population whose **true variance is exactly 1**, and average the variance estimates computed each way.
+
+```{r}
+#| label: sim-var
+set.seed(123)
+sim_var <- replicate(10000, {
+  s <- rnorm(5)
+  c(`Divide by n` = sum((s - mean(s))^2) / 5, `Divide by n - 1` = var(s))
+}) |> t() |> as_tibble()
+sim_var_mean <- summarize(sim_var, across(everything(), mean))
+```
+
+On average, dividing by $n$ gives **`r fmt_num(sim_var_mean[["Divide by n"]], 2)`**, which is too small (the true value is 1), while dividing by $n - 1$ gives **`r fmt_num(sim_var_mean[["Divide by n - 1"]], 2)`**. A sample's values are always closer to *their own* mean than to the true population mean, so the sum of squares is too small, and dividing by $n - 1$ corrects for it exactly.
+
+### The sampling distribution of the mean and the Central Limit Theorem
+
+If we could repeat the experiment many times, each sample would give a slightly different mean. The distribution of those means is the **sampling distribution**, and its standard deviation *is* the standard error. We treat a log-normal distribution fitted to our firing rates as the "population" and take 10,000 samples of size 5, 20, and 80.
+
+```{r}
+#| label: sim-clt
+set.seed(123)
+mu_hat    <- mean(log(rate))
+sigma_hat <- sd(log(rate))
+pop_mean  <- exp(mu_hat + sigma_hat^2 / 2)                                  # true mean
+pop_sd    <- sqrt((exp(sigma_hat^2) - 1) * exp(2 * mu_hat + sigma_hat^2))    # true SD
+
+sample_means <- function(n, n_sims = 10000) {
+  colMeans(matrix(rlnorm(n * n_sims, mu_hat, sigma_hat), nrow = n))
+}
+sims_means <- map(c(5, 20, 80), ~ tibble(n = .x, mean = sample_means(.x))) |> list_rbind()
+
+clt_tbl <- sims_means |>
+  group_by(n) |>
+  summarize(sd_of_means = sd(mean), theory_se = pop_sd / sqrt(first(n)), skewness = skew(mean))
+```
+
+```{r}
+#| label: tbl-clt
+#| tbl-cap: "Sampling distribution of the mean in 10,000 simulated samples"
+clt_tbl |>
+  transmute(`Sample size (n)` = n,
+            `SD of the 10,000 sample means` = fmt_num(sd_of_means, 2),
+            `Theoretical SE (population SD / √n)` = fmt_num(theory_se, 2),
+            `Skewness of the sample means` = fmt_num(skewness, 2)) |>
+  pub_table(align = "cccc")
+```
+
+```{r}
+#| label: fig-clt
+#| fig-cap: "Distribution of the sample mean firing rate in 10,000 simulated samples of size 5, 20, and 80. The dashed line marks the true population mean."
+#| fig-alt: "Three stacked histograms. With n = 5 the sample means are widely spread and strongly right-skewed. With n = 20 they are narrower and less skewed. With n = 80 they are narrow and nearly symmetric. A dashed vertical line marks the true mean in each panel."
+#| fig-width: 6
+#| fig-height: 6
+sims_means |>
+  mutate(n_lab = factor(n, labels = paste("n =", c(5, 20, 80)))) |>
+  ggplot(aes(mean)) +
+  geom_histogram(bins = 40, fill = pal["sky"], color = "white") +
+  geom_vline(xintercept = pop_mean, linetype = "dashed") +
+  facet_wrap(~ n_lab, ncol = 1, scales = "free_y") +
+  coord_cartesian(xlim = c(0, 25)) +
+  labs(x = "Sample mean firing rate (spikes/s)", y = "Number of simulated samples")
+```
+
+Two facts stand out. (1) The SD of the sample means matches the theoretical **$SE = \sigma / \sqrt{n}$**: quadrupling the sample size cuts the SE in half. (2) Even though firing rates themselves are strongly skewed, the sampling distribution of the mean becomes **more symmetric and more normal as $n$ grows**. This is the **Central Limit Theorem**, and it is why the t-based methods in the later projects work well with large samples even for skewed data.
+
+### How often does a 95% confidence interval contain the truth?
+
+A 95% CI method should capture the true mean in 95% of experiments. We check this by simulating 10,000 experiments for each sample size and counting how often $\bar{x} \pm t^* \times SE$ contains the true mean.
+
+```{r}
+#| label: sim-coverage
+set.seed(123)
+coverage <- function(n, n_sims = 10000) {
+  m <- matrix(rlnorm(n * n_sims, mu_hat, sigma_hat), nrow = n)
+  mean_x <- colMeans(m)
+  se_x   <- sqrt(apply(m, 2, var) / n)
+  half   <- qt(0.975, n - 1) * se_x
+  mean(mean_x - half <= pop_mean & pop_mean <= mean_x + half)
+}
+coverage_tbl <- tibble(n = c(5, 10, 30, 100, 400)) |>
+  mutate(coverage = map_dbl(n, coverage))
+```
+
+```{r}
+#| label: tbl-coverage
+#| tbl-cap: "Percent of simulated 95% confidence intervals for the mean that contain the true mean"
+coverage_tbl |>
+  transmute(`Sample size (n)` = n, `Coverage` = scales::percent(coverage, accuracy = 0.1)) |>
+  pub_table(align = "cc")
+```
+
+For these strongly skewed data, a "95%" interval for the mean captures the truth only about **`r scales::percent(coverage_tbl$coverage[coverage_tbl$n == 10], accuracy = 1)`** of the time with $n = 10$, and the coverage reaches about **`r scales::percent(coverage_tbl$coverage[coverage_tbl$n == 100], accuracy = 1)`** with $n = 100$. The method's *actual* error rate (the percent of intervals that miss) is **`r scales::percent(1 - coverage_tbl$coverage[coverage_tbl$n == 10], accuracy = 1)`** with $n = 10$ rather than the nominal 5%. This is the same idea as the **Type I error rate** of a hypothesis test: a method's *advertised* error rate is only reached when its assumptions hold. With skewed data and small samples, the t interval is too optimistic; larger samples, a log transformation, or a bootstrap interval are better.
+
+## Why variability matters {#sec-overlap}
+
+Variability is not a nuisance; it determines how much a difference means. @fig-overlap shows two groups whose means differ by the same amount (3 units) in two situations.
+
+```{r}
+#| label: fig-overlap
+#| fig-cap: "Two groups with the same difference between means (3 units), but different spread. With a small SD (left) the groups barely overlap; with a large SD (right) they overlap almost completely."
+#| fig-alt: "Two panels each showing two bell curves for groups A and B whose centers are 3 units apart. On the left, the curves are narrow and mostly separate. On the right, the curves are wide and overlap almost completely."
+#| fig-width: 7
+#| fig-height: 3.5
+expand_grid(sd = c(1, 3), group = c("A", "B"), x = seq(-8, 14, length.out = 400)) |>
+  mutate(mean = if_else(group == "A", 3, 6),
+         density = dnorm(x, mean, sd),
+         panel = factor(sd, labels = c("Small spread (SD = 1)", "Large spread (SD = 3)"))) |>
+  ggplot(aes(x, density, color = group, linetype = group)) +
+  geom_line(linewidth = 1.1) +
+  facet_wrap(~ panel) +
+  scale_color_manual(values = unname(pal[c("blue", "vermillion")])) +
+  labs(x = "Measurement", y = "Density", color = "Group", linetype = "Group")
+```
+
+The same 3-unit difference is easy to see in the left panel and nearly invisible in the right. The **standardized difference** (the difference divided by the SD, called an *effect size*) is 3 in the left panel and 1 in the right. It is the standardized difference, not the raw difference, that determines how easy it is to detect an effect and therefore a study's **power** (the t-test and ANOVA projects). Lower variability (a more precise instrument, a more homogeneous sample, a within-subjects design) is one of the best ways to increase power.
+
+## Writing up the results {#sec-writeup}
+
+Below is how the results would be written in the Results section of a report. The numbers are inserted directly from the analysis (using inline R code), so they cannot be mistyped and they update automatically if the data change.
+
+::: {.callout-note icon=false appearance="simple"}
+### Results
+
+We recorded `r N` neurons (40 in each of cortex, hippocampus, and striatum) from 12 mice. `r sum(neurons$cell_type == "Regular spiking")` neurons (`r fmt_num(100 * mean(neurons$cell_type == "Regular spiking"), 0)`%) were regular spiking and `r sum(neurons$cell_type == "Fast spiking")` (`r fmt_num(100 * mean(neurons$cell_type == "Fast spiking"), 0)`%) were fast spiking. Firing rates were strongly right-skewed (skewness = `r fmt_num(skew(rate), 2)`; @fig-dist A), so we report medians and interquartile ranges. The median firing rate was `r fmt_num(median(rate), 1)` spikes/s (IQR `r fmt_num(quantile(rate, .25), 1)` to `r fmt_num(quantile(rate, .75), 1)`; bootstrap 95% CI for the median [`r fmt_num(boot_ci[1], 1)`, `r fmt_num(boot_ci[2], 1)`]), well below the mean (*M* = `r fmt_num(mean(rate), 1)`, *SD* = `r fmt_num(sd(rate), 1)`; 95% CI [`r fmt_num(mean_overall$lower, 1)`, `r fmt_num(mean_overall$upper, 1)`]). Medians were `r fmt_num(group_tbl$median[group_tbl$region == "Cortex"], 1)` spikes/s in cortex, `r fmt_num(group_tbl$median[group_tbl$region == "Hippocampus"], 1)` in hippocampus, and `r fmt_num(group_tbl$median[group_tbl$region == "Striatum"], 1)` in striatum (@tbl-groups, @fig-groups). Variability was greater where firing rates were higher (SD of `r fmt_num(group_tbl$sd[group_tbl$region == "Hippocampus"], 1)` in hippocampus versus `r fmt_num(group_tbl$sd[group_tbl$region == "Striatum"], 1)` in striatum), but the coefficient of variation was similar across regions (`r fmt_num(min(group_tbl$cv), 2)` to `r fmt_num(max(group_tbl$cv), 2)`). Spike widths were more symmetric (*M* = `r fmt_num(mean(width), 2)` ms, *SD* = `r fmt_num(sd(width), 2)` ms; @fig-dist B). `r nrow(flagged)` neurons had firing rates above 1.5 × IQR from the upper quartile; all were retained, because they are plausible values (`r sum(flagged$cell_type == "Fast spiking")` were fast-spiking cells).
+:::
+
+Notice what the write-up does: it **names the statistic** for each number (*M*, *SD*, median, IQR, CI), **explains the choice** (median because of skew), reports **n**, and refers to the figures and tables. It does not claim that the regions *differ*: that is a question for a hypothesis test, with the caution that neurons from the same mouse are not independent.
+
+## Conclusions and limitations {#sec-conclusions}
+
+**Conclusion.** Firing rates in these neurons are strongly skewed, so the **median** (`r fmt_num(median(rate), 1)` spikes/s) and **IQR** describe a typical neuron better than the mean and SD (`r fmt_num(mean(rate), 1)` and `r fmt_num(sd(rate), 1)`). Spike widths are more symmetric, and the mean and SD describe them well. The regions differ in both the center and the spread of firing rates, with spread rising with the mean, a pattern that a log transformation largely removes. Robust statistics (median, IQR) are barely affected by extreme values, whereas the mean and SD are strongly affected. The standard error, not the SD, tells us how precisely the mean is known, and for skewed data with small samples, the usual 95% t interval can be too optimistic.
+
+::: {.callout-warning}
+## Re-read the interpretation if your data change
+The numbers and the wording that depends on them update automatically, but the *scientific interpretation* does not. If you change the data or the analysis, re-read this section and revise it in your own words.
+:::
+
+**Limitations.**
+
+- **Description is not inference.** These summaries describe this sample. Statements about differences between regions need hypothesis tests, effect sizes, and an analysis that accounts for the fact that neurons come from only 4 mice per region.
+- **Pseudoreplication.** The 10 neurons per mouse are not independent in real data; the SE and CIs here are too small if mouse-to-mouse variation exists (@sec-se).
+- **A mixture of cell types.** Pooling regular-spiking and fast-spiking neurons creates a skewed, mixed distribution. A separate summary for each cell type may be more meaningful (see @sec-your-turn).
+- **Model-based intervals.** The CI for the geometric mean assumes the logs are roughly normal, and the bootstrap needs a reasonably large, representative sample.
+- **Simulated data.** These data were generated by a computer to illustrate the methods; they carry no real biological information.
+
+# A Guide to Reporting Descriptive Statistics {#sec-guide}
+
+**Always report**
+
+1. The **sample size** (and the number of animals as well as the number of neurons, trials, or cells).
+2. A **center and a spread that go together**: *mean and SD* for symmetric data; *median and IQR* (or Q1 and Q3) for skewed data. Never mix them (a mean with an IQR).
+3. The **units**, and the **number of decimals** the measurement justifies.
+4. For **error bars**, whether they show the **SD**, the **SE**, or a **95% CI**. (Use the SD to show variability in the data; use the SE or a CI to show the precision of an estimate.)
+5. How **outliers** were handled, and the results with and without them if it matters.
+
+**Choosing a summary**
+
+```{r}
+#| label: tbl-choose
+#| tbl-cap: "Which summary for which kind of data?"
+tribble(
+  ~`Kind of data`,                                  ~`Center`,                       ~`Spread`,                   ~`Display`,
+  "Nominal (categories)",                           "Mode",                          "Counts, percentages",       "Bar chart",
+  "Ordinal (ranks)",                                "Median",                        "IQR, range",                "Bar chart of counts, box plot",
+  "Numeric, symmetric, no outliers",                "Mean",                          "SD (and SE or CI of the mean)", "Histogram, points with mean and CI",
+  "Numeric, skewed or with outliers",               "Median",                        "IQR (or MAD)",              "Histogram, box plot with points",
+  "Positive and right-skewed (ratio scale)",        "Median or geometric mean",      "IQR or geometric SD",       "Log-scale axis"
+) |>
+  pub_table(align = "llll")
+```
+
+**Style tips**
+
+- Write statistics in italics: *M*, *SD*, *n*, *SE*. State the statistic every time ("*M* = 3.2, *SD* = 1.1"), and do not use ± without saying what it is (SD or SE).
+- Do not report more precision than the data support (a mean firing rate of 6.5593 spikes/s is false precision).
+- Describe the **shape** in words when it matters ("right-skewed"), and justify your choice of summary.
+- Be careful with words: the **mean** is the arithmetic average; "average" is vague. "Typical" values are best described by the median in skewed data.
+
+# Your Turn {#sec-your-turn}
+
+Change one thing at a time, re-render, and describe in the notebook log (below) what changed and why.
+
+1. **Summaries by cell type.** Compute the median, IQR, mean, and SD of firing rate separately for regular-spiking and fast-spiking neurons. Does the skewness within each cell type look different from the pooled skewness? Why might the pooled data look more skewed?
+2. **Mice, not neurons.** Average the firing rate within each mouse (`group_by(mouse_id)`), then compute the mean, SD, and SE of those 12 mouse means. How do they compare with the neuron-level values? Why is this more honest when neurons from one mouse are correlated?
+3. **Trimmed means.** Change `trim` to 0, 0.05, 0.2, and 0.5. What are the trimmed mean with `trim = 0` and with `trim = 0.5` equal to?
+4. **The artifact.** Change the artifact values (`artifact_values`) and add a second extreme value. Which statistics change the most? Which barely change?
+5. **A different bin width.** Re-draw the firing-rate histogram with `binwidth = 0.5`, `1`, `5`, and `10`. How does the picture (and your impression of the shape and the mode) change? Why do we say a histogram's shape can depend on the bins?
+6. **Log scale.** Draw the histogram of `log(firing_rate_hz)` and compute the mean and SD of the logs. Back-transform the mean with `exp()`. Which statistic from @tbl-center does it equal?
+7. **SE and n.** Take random samples of 10, 40, and 120 neurons (`slice_sample(neurons, n = 10)`), and compute the SD and SE of firing rate for each. Which one changes systematically with $n$, and which one stays about the same?
+8. **A normal variable.** Repeat the coverage simulation for **symmetric** data (use `rnorm()` with a mean of 6.5 and an SD of 7.5, and the true mean 6.5). How does the coverage at $n = 10$ compare with the skewed case? What does this say about when a t interval can be trusted?
+9. **Your own data.** Replace the CSV in `Data/` with a file of your own (one row per subject or measurement), update the file and variable names, decide which summaries fit the scale and shape of each variable, and write your own problem statement, methods, and conclusions.
+
+# Notebook Log {#sec-log}
+
+Keep a running record of decisions so that you (and your instructor) can see how the analysis developed. Add a row whenever you change something.
+
+```{r}
+#| label: tbl-log
+#| tbl-cap: "Analysis decision log (edit the rows below)"
+tribble(
+  ~Date,          ~`Decision or change`,                                              ~Reason,
+  "YYYY-MM-DD",   "Report median and IQR for firing rate; mean and SD for spike width", "Firing rate is strongly right-skewed; spike width is nearly symmetric",
+  "YYYY-MM-DD",   "Kept all flagged high firing rates",                               "Plausible fast-spiking neurons; no evidence of error",
+  "",             "",                                                                 ""
+) |>
+  pub_table(align = "lll")
+```
+
+# Reproducibility {#sec-repro}
+
+The R and package versions used to create this notebook are listed below.
+
+```{r}
+#| label: session-info
+sessionInfo()
+```
