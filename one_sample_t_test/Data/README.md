@@ -56,6 +56,6 @@ The values were simulated in R from a population with a true mean DI of 0.15 and
 
 To adapt this project for your own study, save your data as a CSV with the same layout (a header row of variable names, then one row per subject), put it in this folder, and update the file name and variable names in `R/02_analysis.R` and the lab notebook. Write a README like this one for your file.
 
-## Citation and license
+## Citation
 
-This is a teaching data set with no real-world scientific content and should not be cited as evidence about mouse behavior. It may be freely used and modified for teaching and learning.
+This is a teaching data set with no real-world scientific content. It should not be cited as evidence about mouse behavior.

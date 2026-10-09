@@ -33,7 +33,7 @@ required_packages <- c("tidyverse", "here", "broom", "effectsize", "pwr",
 missing_packages <- setdiff(required_packages, rownames(installed.packages()))
 if (length(missing_packages) > 0) {
   message("Installing missing packages: ", paste(missing_packages, collapse = ", "))
-  install.packages(missing_packages)
+  install.packages(missing_packages, repos = "https://cloud.r-project.org")
 }
 
 # Load the packages (quietly, so the notebook is not cluttered with startup text)
@@ -99,6 +99,3 @@ pub_table <- function(x, ...) {
     kbl(...) |>
     kable_classic(full_width = FALSE, html_font = "inherit", position = "center")
 }
-
-# Create the folder for saved figures/tables if it does not exist yet.
-dir.create(here("output", "figures"), recursive = TRUE, showWarnings = FALSE)

@@ -120,7 +120,7 @@ Twenty-six adult mice (13 female, 13 male; 10–14 weeks old) were tested. *(Sim
 
 ## Procedure
 
-Each mouse first explored two identical objects in an open arena (familiarization phase). After a delay, one object was replaced by a novel object (test phase). An observer used a stopwatch to record the seconds each mouse spent actively exploring the **novel** object and the **familiar** object during the test phase. *(In a real notebook, include the arena size, object types, delays, and how exploration was defined.)*
+Each mouse first explored two identical objects in an open arena (familiarization phase). After a delay, one object was replaced by a novel object (test phase). An observer used a stopwatch to record the seconds each mouse spent actively exploring the **novel** object and the **familiar** object during the test phase. *(In a real notebook, include the arena size, object types, delays, how exploration was defined, and whether the observer was blind to the animals' group or condition. Blind scoring protects against unintentional bias.)*
 
 ## Outcome measure
 
@@ -209,7 +209,7 @@ where $\bar{x}$ is the sample mean, $s$ the sample standard deviation, and $n$ t
 
 ## Power and sample size plan {#sec-power-plan}
 
-**Power** is the probability of rejecting $H_0$ when it is false. It depends on the effect size, the sample size, $\alpha$, and whether the test is one- or two-tailed. Good practice is to plan sample size *before* collecting data. The `pwr` package does this for common tests.
+**Power** is the probability of rejecting $H_0$ when it is false. It depends on the effect size, the sample size, $\alpha$, and whether the test is one- or two-tailed. Good practice is to plan sample size *before* collecting data and to record the plan in your notebook. (Here, because this is a teaching template, we do the calculation alongside the data.) The `pwr` package does this for common tests.
 
 ```{r}
 #| label: power-plan
@@ -251,10 +251,23 @@ desc |>
 
 @tbl-desc shows the mean DI was `r fmt_num(desc$M)` (*SD* = `r fmt_num(desc$SD)`), with individual mice ranging from `r fmt_num(desc$Min)` to `r fmt_num(desc$Max)`.
 
+We also check the remaining variables. In this sample, the numbers of females and males are equal and their ages are similar. The mean DI is positive in both groups, though it is more variable among males (@tbl-sex). With so few mice per group, we describe these patterns but do not test them.
+
+```{r}
+#| label: tbl-sex
+#| tbl-cap: "Sample composition and DI by sex (descriptive only)"
+nor_clean |>
+  group_by(Sex = sex) |>
+  summarize(n = n(), `Mean age (weeks)` = mean(age_weeks),
+            `Mean DI` = mean(DI), `SD of DI` = sd(DI)) |>
+  pub_table(digits = 2, align = "lcccc")
+```
+
 ```{r}
 #| label: fig-eda
 #| fig-cap: "Distribution of the discrimination index. (A) Histogram; the dashed line marks DI = 0 (no preference). (B) Normal Q-Q plot; points close to the line indicate approximate normality."
 #| fig-height: 3.5
+#| fig-alt: "Two panels. Panel A is a histogram of discrimination index values, centered above zero with a dashed vertical line at zero. Panel B is a normal Q-Q plot whose points fall close to a straight line."
 p_hist <- ggplot(nor_clean, aes(DI)) +
   geom_histogram(binwidth = 0.1, fill = pal["sky"], color = "white") +
   geom_vline(xintercept = mu0, linetype = "dashed") +
@@ -268,7 +281,7 @@ p_qq <- ggplot(nor_clean, aes(sample = DI)) +
 p_hist + p_qq + plot_annotation(tag_levels = "A")
 ```
 
-The distribution (@fig-eda) is roughly symmetric and bell-shaped, centered above zero, with no values that stand apart from the rest.
+In this sample, the distribution (@fig-eda) is roughly symmetric and bell-shaped, centered above zero, with no values that stand apart from the rest.
 
 ## Checking the assumptions {#sec-assumptions}
 
@@ -281,7 +294,7 @@ outliers <- nor_clean |>
   filter(abs(z) > 3)
 ```
 
-The Shapiro–Wilk test did not indicate a departure from normality, *W* = `r fmt_num(shapiro$statistic, 3)`, `r fmt_p(shapiro$p.value, md = TRUE)`, and `r nrow(outliers)` observations were more than 3 standard deviations from the mean. The assumptions of the t-test are reasonably met.
+The Shapiro–Wilk test `r if (shapiro$p.value < alpha) "indicated" else "did not indicate"` a departure from normality, *W* = `r fmt_num(shapiro$statistic, 3)`, `r fmt_p(shapiro$p.value, md = TRUE)`, and `r nrow(outliers)` observations were more than 3 standard deviations from the mean. Together with the plots in @fig-eda, `r if (shapiro$p.value < alpha || nrow(outliers) > 0) "the normality assumption is questionable, so the Wilcoxon check below is especially important." else "the assumptions of the t-test appear reasonably met."`
 
 ::: {.callout-warning}
 ## A non-significant normality test is not proof of normality
@@ -334,13 +347,14 @@ The p-value is the probability of obtaining a result at least this extreme **if 
 
 The p-value tells us whether an effect is *detectable*; the **effect size** tells us how *large* it is. Cohen's *d* was **`r fmt_num(d$Cohens_d)`** (95% CI [`r fmt_num(d$CI_low)`, `r fmt_num(d$CI_high)`]), which is conventionally described as a **`r interpret_cohens_d(d$Cohens_d, rules = "cohen1988")`** effect.
 
-The mean DI of `r fmt_num(tt_tidy$estimate)` means that, on average, mice spent about `r round(100 * (1 + tt_tidy$estimate) / 2)`% of their exploration time on the novel object, compared with 50% if they had no preference. The 95% confidence interval for the mean DI was [`r fmt_num(ci_low)`, `r fmt_num(ci_high)`]. It `r if (ci_low > mu0 || ci_high < mu0) "does not include" else "includes"` 0, which agrees with the test decision. Notice also that the confidence interval for *d* is wide: with `r n` mice, the true effect could plausibly be anywhere from small to very large.
+The mean DI of `r fmt_num(tt_tidy$estimate)` means that, on average, mice spent about `r round(100 * (1 + tt_tidy$estimate) / 2)`% of their exploration time on the novel object, compared with 50% if they had no preference. The 95% confidence interval for the mean DI was [`r fmt_num(ci_low)`, `r fmt_num(ci_high)`]. It `r if (ci_low > mu0 || ci_high < mu0) "does not include" else "includes"` 0, which agrees with the test decision. Notice also how wide the confidence interval for *d* is (`r fmt_num(d$CI_low)` to `r fmt_num(d$CI_high)`): with only `r n` mice, the true effect size is estimated imprecisely.
 
 ```{r}
 #| label: fig-main
 #| fig-cap: "Novel object discrimination index for each mouse. Blue points are individual mice, the box shows the median and interquartile range, and the orange marker shows the mean with its 95% confidence interval. The dashed line marks DI = 0 (no preference)."
 #| fig-width: 4.2
 #| fig-height: 4.5
+#| fig-alt: "Dot plot with box plot of discrimination index for 24 mice. Most points lie above a dashed line at zero. An orange marker shows the mean, above zero, with a 95% confidence interval that does not reach zero."
 mean_df <- tibble(m = mean(nor_clean$DI), lo = ci_low, hi = ci_high)
 
 ggplot(nor_clean, aes(x = "All mice", y = DI)) +
@@ -362,6 +376,7 @@ The power curves in @fig-power show how power grows with sample size for small, 
 
 ```{r}
 #| label: fig-power
+#| fig-alt: "Line graph of statistical power against sample size for small, medium, and large effects. Power rises with sample size, fastest for the large effect. At 24 mice, power for a medium effect is about 65 percent, below the 80 percent reference line."
 #| fig-cap: "Statistical power of a two-tailed one-sample t-test (α = .05) as a function of sample size, for small, medium, and large true effects. The dashed horizontal line marks 80% power; the dotted vertical line marks the present sample size."
 power_curve <- expand_grid(n = 5:80, d = c(0.2, 0.5, 0.8)) |>
   mutate(
@@ -371,13 +386,14 @@ power_curve <- expand_grid(n = 5:80, d = c(0.2, 0.5, 0.8)) |>
                                    "Large (d = 0.8)"))
   )
 
-ggplot(power_curve, aes(n, power, color = d_label)) +
+ggplot(power_curve, aes(n, power, color = d_label, linetype = d_label)) +
   geom_line(linewidth = 1) +
   geom_hline(yintercept = target_power, linetype = "dashed") +
   geom_vline(xintercept = n, linetype = "dotted") +
   scale_color_manual(values = unname(pal[c("sky", "blue", "vermillion")])) +
   scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
-  labs(x = "Sample size (n)", y = "Power", color = "True effect size")
+  labs(x = "Sample size (n)", y = "Power",
+       color = "True effect size", linetype = "True effect size")
 ```
 
 ```{r}
@@ -404,17 +420,17 @@ In each simulated experiment we run the t-test and record the p-value.
 
 ```{r}
 #| label: simulate
-simulate_p_values <- function(true_mean, sd, n, mu0 = 0, n_sims = 10000) {
+simulate_p_values <- function(true_mean, sigma, n, mu0 = 0, n_sims = 10000) {
   map_dbl(seq_len(n_sims),
-          ~ t.test(rnorm(n, mean = true_mean, sd = sd), mu = mu0)$p.value)
+          ~ t.test(rnorm(n, mean = true_mean, sd = sigma), mu = mu0)$p.value)
 }
 
 set.seed(123)                      # makes the simulation reproducible
 sd_est <- sd(nor_clean$DI)         # use our sample SD as the "true" SD
 d_true <- 0.5
 
-p_h0 <- simulate_p_values(true_mean = mu0,                    sd = sd_est, n = n)
-p_h1 <- simulate_p_values(true_mean = mu0 + d_true * sd_est, sd = sd_est, n = n)
+p_h0 <- simulate_p_values(true_mean = mu0,                    sigma = sd_est, n = n)
+p_h1 <- simulate_p_values(true_mean = mu0 + d_true * sd_est, sigma = sd_est, n = n)
 
 sim_summary <- tibble(
   World = c("H0 is true (no real effect)", "H1 is true (d = 0.5)"),
@@ -437,6 +453,7 @@ sim_summary |>
 #| fig-cap: "Distribution of p-values across 10,000 simulated experiments. When H0 is true (left), p-values are spread evenly between 0 and 1, so about 5% fall below .05 (Type I errors). When a real effect exists (right), p-values pile up near 0, but those to the right of the dashed line (p ≥ .05) are Type II errors."
 #| fig-width: 7
 #| fig-height: 3.5
+#| fig-alt: "Two histograms of p-values from 10,000 simulated experiments. When the null hypothesis is true, p-values are spread evenly from 0 to 1. When a medium effect exists, p-values are concentrated near 0, but many still fall above .05."
 bind_rows(
   tibble(p = p_h0, scenario = "H0 true (no real effect)"),
   tibble(p = p_h1, scenario = "H1 true (d = 0.5)")
@@ -452,6 +469,7 @@ What @tbl-sim and @fig-sim teach us:
 
 - When $H_0$ is true, the t-test falsely rejects it in about **`r scales::percent(mean(p_h0 < alpha), accuracy = 0.1)`** of experiments, close to our chosen $\alpha$ of 5%. **The Type I error rate is something we set.**
 - When a medium effect really exists, the test detects it only about **`r scales::percent(mean(p_h1 < alpha), accuracy = 0.1)`** of the time (its power), so it commits a Type II error in about **`r scales::percent(mean(p_h1 >= alpha), accuracy = 0.1)`**. **The Type II error rate depends on sample size, effect size, and variability.** It is reduced by studying more animals or by measuring more precisely.
+- Simulated rates have a little random error of their own: with 10,000 experiments, a rate near 5% is accurate to within about ±0.4 percentage points.
 - A single "significant" result does not tell you which world you are in. That is why effect sizes, confidence intervals, and replication matter.
 
 ## Robustness check
@@ -463,7 +481,7 @@ If we are unsure about normality, we can confirm the conclusion with a test that
 wilcox <- wilcox.test(nor_clean$DI, mu = mu0, exact = FALSE) |> tidy()
 ```
 
-The Wilcoxon signed-rank test led to the same conclusion as the t-test, *V* = `r wilcox$statistic`, `r fmt_p(wilcox$p.value, md = TRUE)`.
+The Wilcoxon signed-rank test `r if ((wilcox$p.value < alpha) == (p_value < alpha)) "led to the same conclusion as" else "led to a different conclusion from"` the t-test, *V* = `r wilcox$statistic`, `r fmt_p(wilcox$p.value, md = TRUE)`.
 
 ## Results write-up {#sec-writeup}
 
@@ -472,7 +490,7 @@ Below is how the result would be written in the Results section of a report. The
 ::: {.callout-note icon=false appearance="simple"}
 ### Results
 
-Of the `r n_recorded` mice tested, `r n_excluded` were excluded for exploring the objects for less than `r min_explore` s in total, leaving `r n` mice for analysis. A one-sample *t*-test showed that the mean novel object discrimination index (*M* = `r fmt_num(desc$M)`, *SD* = `r fmt_num(desc$SD)`) was `r if (p_value < alpha) "significantly" else "not significantly"` different from zero, *t*(`r t_df`) = `r fmt_num(t_value)`, `r fmt_p(p_value, md = TRUE)`, 95% CI [`r fmt_num(ci_low)`, `r fmt_num(ci_high)`]. The effect size was `r interpret_cohens_d(d$Cohens_d, rules = "cohen1988")` (Cohen's *d* = `r fmt_num(d$Cohens_d)`, 95% CI [`r fmt_num(d$CI_low)`, `r fmt_num(d$CI_high)`]). Individual results are shown in @fig-main. A Wilcoxon signed-rank test, which does not assume normality, gave the same conclusion (`r fmt_p(wilcox$p.value, md = TRUE)`).
+Of the `r n_recorded` mice tested, `r n_excluded` were excluded for exploring the objects for less than `r min_explore` s in total, leaving `r n` mice for analysis. A one-sample *t*-test showed that the mean novel object discrimination index (*M* = `r fmt_num(desc$M)`, *SD* = `r fmt_num(desc$SD)`) was `r if (p_value < alpha) "significantly" else "not significantly"` different from zero, *t*(`r t_df`) = `r fmt_num(t_value)`, `r fmt_p(p_value, md = TRUE)`, 95% CI [`r fmt_num(ci_low)`, `r fmt_num(ci_high)`]. The effect size was `r interpret_cohens_d(d$Cohens_d, rules = "cohen1988")` (Cohen's *d* = `r fmt_num(d$Cohens_d)`, 95% CI [`r fmt_num(d$CI_low)`, `r fmt_num(d$CI_high)`]). Individual results are shown in @fig-main. A Wilcoxon signed-rank test, which does not assume normality, `r if ((wilcox$p.value < alpha) == (p_value < alpha)) "gave the same conclusion" else "gave a different conclusion"` (`r fmt_p(wilcox$p.value, md = TRUE)`).
 :::
 
 ## Conclusions and limitations {#sec-conclusions}
@@ -488,6 +506,8 @@ The numbers and the reject/fail-to-reject wording above update automatically, bu
 
 - **Sample size.** With `r n` mice, power for a medium effect was only about `r round(100 * power_medium)`%, and the confidence interval for the effect size is wide.
 - **No control group.** Comparing the DI to 0 shows a preference for the novel object, but it cannot tell us what *caused* it (for example, memory vs. a general attraction to novelty). A treatment or comparison group would be needed for causal questions, which calls for a two-sample test (see the `two_sample_t_test` project).
+- **Outcome measure.** DI is a ratio bounded between −1 and +1, so it may not be perfectly normal, especially with very small samples. We checked this and ran a rank-based test. An alternative analysis is a *paired* t-test comparing `time_novel_s` and `time_familiar_s` within each mouse.
+- **Sex as a biological variable.** Both sexes were tested, but there are too few mice per sex to evaluate sex differences. A larger study would be needed.
 - **Exclusions.** Excluding mice changes the sample. The rule was set in advance, which protects against bias, and the number excluded is reported.
 - **Simulated data.** These data were generated by a computer to illustrate the methods; they carry no real biological information.
 

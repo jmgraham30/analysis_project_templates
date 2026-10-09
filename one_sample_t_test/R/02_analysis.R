@@ -19,6 +19,9 @@
 # ---- 1. Set up ---------------------------------------------------------------
 source("R/00_setup.R")   # loads packages, plot theme, and helper functions
 
+# Create a folder for the figures this script saves (does nothing if it exists)
+dir.create(here("output", "figures"), recursive = TRUE, showWarnings = FALSE)
+
 
 # ---- 2. Decisions made BEFORE looking at the results -------------------------
 # Good practice: write down your decisions up front so they cannot be (even
@@ -67,7 +70,7 @@ cat("Mice analyzed:", n, "\n")
 
 # ---- 5. Descriptive statistics ----------------------------------------------
 desc <- nor_clean |>
-  summarise(
+  summarize(
     n      = n(),
     mean   = mean(DI),
     sd     = sd(DI),
@@ -77,6 +80,12 @@ desc <- nor_clean |>
     max    = max(DI)
   )
 print(desc)
+
+# Check the other variables too: is the sample balanced? (Descriptive only;
+# with so few mice per group we do not test for sex differences.)
+nor_clean |>
+  group_by(sex) |>
+  summarize(n = n(), mean_age = mean(age_weeks), mean_DI = mean(DI), sd_DI = sd(DI))
 
 
 # ---- 6. Exploratory plots: look at the distribution BEFORE testing -----------
@@ -205,17 +214,23 @@ power_curve <- expand_grid(n = 5:80, d = c(0.2, 0.5, 0.8)) |>
                                         "Medium (d = 0.5)",
                                         "Large (d = 0.8)")))
 
-fig_power <- ggplot(power_curve, aes(n, power, color = d_label)) +
+# Lines differ in both color AND line type so they can be told apart in grayscale.
+fig_power <- ggplot(power_curve, aes(n, power, color = d_label, linetype = d_label)) +
   geom_line(linewidth = 1) +
   geom_hline(yintercept = target_power, linetype = "dashed") +
   geom_vline(xintercept = n, linetype = "dotted") +
   scale_color_manual(values = unname(pal[c("sky", "blue", "vermillion")])) +
   scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
-  labs(x = "Sample size (n)", y = "Power", color = "True effect size")
+  labs(x = "Sample size (n)", y = "Power",
+       color = "True effect size", linetype = "True effect size")
 print(fig_power)
 
 ggsave(here("output", "figures", "fig_power_curve.png"), fig_power,
        width = 6, height = 4, dpi = 300)
+
+# A note on Monte Carlo error: with 10,000 simulations, a simulated rate is
+# accurate to about +/- 0.4 percentage points (for a rate near 5%), so 4.6% is
+# consistent with a true rate of 5%.
 
 # A caution about "observed power": computing power from the d you just
 # observed adds no information beyond the p-value (they are mathematically
@@ -231,17 +246,17 @@ ggsave(here("output", "figures", "fig_power_curve.png"), fig_power,
 #   Reject H0           | TYPE I error (alpha) | Correct (power = 1 - beta)
 #   Fail to reject H0   | Correct (1 - alpha)  | TYPE II error (beta)
 
-simulate_p_values <- function(true_mean, sd, n, mu0 = 0, n_sims = 10000) {
+simulate_p_values <- function(true_mean, sigma, n, mu0 = 0, n_sims = 10000) {
   map_dbl(seq_len(n_sims),
-          ~ t.test(rnorm(n, mean = true_mean, sd = sd), mu = mu0)$p.value)
+          ~ t.test(rnorm(n, mean = true_mean, sd = sigma), mu = mu0)$p.value)
 }
 
 set.seed(123)
 sd_est <- sd(nor_clean$DI)            # use our sample SD as the "true" SD
 d_true <- 0.5                         # a medium true effect for scenario 2
 
-p_h0 <- simulate_p_values(true_mean = mu0,              sd = sd_est, n = n)
-p_h1 <- simulate_p_values(true_mean = mu0 + d_true * sd_est, sd = sd_est, n = n)
+p_h0 <- simulate_p_values(true_mean = mu0,                     sigma = sd_est, n = n)
+p_h1 <- simulate_p_values(true_mean = mu0 + d_true * sd_est, sigma = sd_est, n = n)
 
 type1_rate <- mean(p_h0 < alpha)   # should be close to alpha (.05)
 power_sim  <- mean(p_h1 < alpha)   # should be close to the pwr.t.test() answer
