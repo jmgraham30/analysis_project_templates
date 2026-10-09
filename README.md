@@ -15,7 +15,7 @@ Template R projects for an undergraduate **neuroscience research methods** cours
 | `measures_tendency_variability` | Measures of central tendency and variability | Planned |
 | `correlation_regression` | Correlation and regression | Planned |
 | `one_sample_t_test` | One-sample t-test | **Ready for review** |
-| `two_sample_t_test` | Two-sample t-test | Planned |
+| `two_sample_t_test` | Two-sample t-test | **Ready for review** |
 | `oneway_anova` | One-way analysis of variance | Planned |
 | `twoway_anova` | Two-way analysis of variance | Planned |
 | `chisquare_test` | Chi-square test | Planned |
@@ -38,6 +38,18 @@ project_name/
 ```
 
 Running the code creates an `output/` folder with saved figures. It is regenerated every time and is not tracked by git.
+
+## What is an RStudio project?
+
+An **RStudio project** is a folder that RStudio treats as one self-contained piece of work, such as one analysis, one lab report, or one study. You recognize it by the `.Rproj` file inside. Opening that file does three useful things:
+
+- **It sets the working directory** to the project folder. R looks for files relative to that folder, so a path like `Data/my_data.csv` works on any computer, with no `C:\Users\yourname\...` paths that break when the work moves.
+- **It gives each analysis a clean workspace.** Objects, history, and open files from one project do not leak into another.
+- **It keeps everything for one analysis together** (data, code, notebook, and output), so you can find it, share it, or return to it months later.
+
+Think of it like a lab notebook with its own labeled shelf: everything for one experiment is in one place, and nothing gets mixed up with another experiment. Working this way is a core habit of reproducible research. A collaborator, or you in six months, should be able to open the project and run it without guessing where things belong.
+
+**Rule of thumb:** open the `.Rproj` file first, every time. You can check that it worked by looking at the project name in the top-right corner of RStudio, or by running `getwd()` in the Console.
 
 ## Getting started (for students)
 

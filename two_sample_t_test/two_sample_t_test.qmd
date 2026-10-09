@@ -1,25 +1,673 @@
 ---
-title: "Untitled"
-format: html
+title: "Does Chronic Stress Reduce Open-Arm Exploration? A Two-Sample t-Test"
+subtitle: "Lab notebook template: two-sample (independent groups) t-test"
+author: "Your Name"
+date: today
+date-format: "MMMM D, YYYY"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: true
+    code-fold: show
+    code-tools: true
+    embed-resources: true
+    smooth-scroll: true
+    fig-width: 6.5
+    fig-height: 4.2
+    fig-dpi: 300
+    fig-align: center
+    tbl-cap-location: top
+execute:
+  echo: true
+  warning: false
+  message: false
 ---
 
-## Quarto
+::: {.callout-note icon=false}
+## How to use this notebook
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+This is a **template lab notebook** that walks through a complete analysis: a question, a plan, the data, the code, and a written report of the results. To make it yours:
 
-## Running Code
+1. Open `two_sample_t_test.Rproj` first (so RStudio uses this folder as the working directory).
+2. Replace `Your Name` in the header above with your name.
+3. Click **Render** to build the notebook. Every number, table, and figure is regenerated from the data and code.
+4. Read the text, then change things and re-render to see what happens (see @sec-your-turn).
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+The data are **simulated** for teaching purposes. No animals were tested.
+:::
+
+| Notebook details | |
+|:--|:--|
+| **Project** | Two-sample (independent groups) t-test |
+| **Data file** | `Data/elevated_plus_maze.csv` |
+| **Analysis script** | `R/02_analysis.R` (same analysis, with extra teaching comments) |
+| **Helper code** | `R/00_setup.R` (packages, plot theme, formatting helpers) |
+| **Software** | `r R.version.string`; Quarto |
 
 ```{r}
-1 + 1
+#| label: setup
+# Load packages, the plot theme, and helper functions (see R/00_setup.R)
+source("R/00_setup.R")
 ```
 
-You can add options to executable code like this 
+# Problem Statement and Hypotheses {#sec-problem}
+
+## Background
+
+The **elevated plus maze (EPM)** is a widely used test of anxiety-like behavior in rodents. The maze is shaped like a plus sign and raised off the floor. Two arms are **open** (no walls) and two are **closed** (walled). Mice are naturally drawn to enclosed spaces and wary of open, elevated ones, so a more anxious mouse tends to spend **less** of the test in the open arms.
+
+Chronic stress is known to alter anxiety-related behavior. In this notebook we ask whether mice exposed to two weeks of chronic mild stress spend less time in the open arms than unstressed control mice.
+
+## Problem statement
+
+> **Do the mean percentages of time spent in the open arms differ between stressed mice and control mice?**
+
+We are comparing the means of **two independent groups** (each mouse is in only one group and is measured once), so the appropriate test is a **two-sample (independent-samples) t-test**.
+
+## Hypotheses
+
+The **null hypothesis** ($H_0$) says there is no difference between the population means. The **alternative hypothesis** ($H_1$) says there is one.
+
+$$
+H_0: \mu_{\text{Control}} - \mu_{\text{Stress}} = 0 \qquad \text{(no difference between the population means)}
+$$
+
+$$
+H_1: \mu_{\text{Control}} - \mu_{\text{Stress}} \neq 0 \qquad \text{(the population means differ)}
+$$
+
+Here $\mu$ is a **population** mean (what we would see if we could test every mouse of this type under each condition). We estimate it from our samples. The difference is defined as **Control minus Stress**, so a positive difference means the control mice spent *more* time in the open arms.
+
+We use a **two-tailed** test because stress could, in principle, change open-arm exploration in either direction, and we set the **significance level** at $\alpha = .05$.
+
+## Decision errors: Type I and Type II {#sec-errors}
+
+Any decision based on samples can be wrong. @tbl-errors shows the four possible outcomes of a hypothesis test.
 
 ```{r}
-#| echo: false
-2 * 2
+#| label: tbl-errors
+#| tbl-cap: "Possible outcomes of a hypothesis test"
+tribble(
+  ~Decision,                 ~`H0 is actually true`,                         ~`H0 is actually false`,
+  "Reject H0",               "Type I error (probability = α)",                "Correct decision (probability = power = 1 − β)",
+  "Fail to reject H0",       "Correct decision (probability = 1 − α)",        "Type II error (probability = β)"
+) |>
+  pub_table(align = "lcc")
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+- A **Type I error** (false positive) means concluding that stress changes open-arm time when, in the population, it does not. We control this rate by choosing $\alpha$.
+- A **Type II error** (false negative) means missing a real effect of stress. Its probability is $\beta$, and **power** $= 1 - \beta$ is the probability of detecting a real effect of a given size. We study both in @sec-sim.
+
+# Methods {#sec-methods}
+
+## Subjects and design
+
+Twenty-nine adult mice were tested: 15 **control** mice and 14 **stress** mice. Mice were randomly assigned to groups. *(Simulated data for teaching. In a real notebook, give the species/strain, sex, age, source, housing, how animals were randomized, and the approval number of your animal-care protocol.)* The stress group experienced two weeks of chronic mild stress; control mice were handled normally.
+
+Random assignment is a strength of the design: because mice were assigned by chance, a difference between the groups can reasonably be attributed to the stress treatment, not to pre-existing differences.
+
+## Procedure
+
+Each mouse was placed in the center of the maze and allowed to explore for 5 minutes. Video tracking recorded how long the mouse spent in the open arms and in the closed arms, and how many times it entered any arm. *(In a real notebook, include the maze dimensions, lighting, time of day, and whether the scorer was blind to group. Blind scoring protects against unintentional bias.)*
+
+## Outcome measure
+
+The main outcome was **percent of time spent in the open arms** (higher values mean less anxiety-like behavior). As a check on general activity, we also recorded the **total number of arm entries**.
+
+## Missing data
+
+One stress mouse (`S09`) jumped off the maze, so its test could not be completed and its values are recorded as missing (`NA`). We analyzed the data from the remaining mice (a "complete-case" analysis) and report this loss. Missing values are never recorded as 0, because that would claim the mouse spent exactly 0% of its time in the open arms.
+
+## Data description {#sec-data}
+
+The raw data are stored in `Data/elevated_plus_maze.csv` (one row per mouse). The raw file is **never edited by hand**: all cleaning and calculations are done in code so they are documented and repeatable.
+
+```{r}
+#| label: tbl-dictionary
+#| tbl-cap: "Variables in the raw data file"
+tribble(
+  ~Variable,         ~Type,        ~Description,
+  "mouse_id",        "Text",       "Unique animal identifier (C = control, S = stress)",
+  "group",           "Category",   "Experimental group: Control or Stress",
+  "sex",             "Category",   "F = female, M = male",
+  "open_arm_pct",    "Number",     "Percent of the 5-minute test spent in the open arms (NA = test not completed)",
+  "total_entries",   "Whole number", "Total number of arm entries (NA = test not completed)"
+) |>
+  pub_table(align = "lll")
+```
+
+We import the data and immediately look at it: its structure, its ranges, and whether anything is missing or duplicated.
+
+```{r}
+#| label: import
+alpha        <- 0.05   # significance level (accepted Type I error rate)
+target_power <- 0.80   # conventional minimum power
+
+epm_raw <- read_csv(here("Data", "elevated_plus_maze.csv"),
+                    show_col_types = FALSE)
+
+glimpse(epm_raw)
+```
+
+```{r}
+#| label: checks
+tibble(
+  `Rows`                      = nrow(epm_raw),
+  `Missing outcome values`    = sum(is.na(epm_raw$open_arm_pct)),
+  `Duplicated mouse IDs`      = sum(duplicated(epm_raw$mouse_id))
+) |>
+  pub_table(align = "ccc")
+```
+
+Next we set up the variables (putting the groups in a meaningful order) and drop the mouse with missing data.
+
+```{r}
+#| label: prepare
+epm <- epm_raw |>
+  mutate(
+    group = factor(group, levels = c("Control", "Stress")),
+    sex   = factor(sex, levels = c("F", "M"), labels = c("Female", "Male"))
+  )
+
+missing_mice <- epm |> filter(is.na(open_arm_pct))
+epm_clean    <- epm |> drop_na(open_arm_pct)
+
+n_recorded <- nrow(epm)
+n1 <- sum(epm_clean$group == "Control")   # analyzed controls
+n2 <- sum(epm_clean$group == "Stress")    # analyzed stress mice
+```
+
+```{r}
+#| label: tbl-n
+#| tbl-cap: "Number of mice recorded and analyzed in each group"
+count(epm, group, name = "Recorded") |>
+  left_join(count(epm_clean, group, name = "Analyzed"), by = "group") |>
+  rename(Group = group) |>
+  pub_table(align = "lcc")
+```
+
+Of the `r n_recorded` mice recorded, `r nrow(missing_mice)` (`r paste(missing_mice$mouse_id, collapse = ", ")`) had no outcome. The analysis therefore compares **`r n1` control** mice with **`r n2` stress** mice.
+
+# Statistical Analysis {#sec-stats}
+
+## Planned analysis
+
+- **Test.** A two-tailed **Welch's two-sample t-test** comparing the group means, with $\alpha = .05$. The test statistic is
+$$t = \frac{\bar{x}_1 - \bar{x}_2}{\sqrt{\dfrac{s_1^2}{n_1} + \dfrac{s_2^2}{n_2}}},$$
+where $\bar{x}$, $s$, and $n$ are each group's mean, standard deviation, and size. Welch's test adjusts the degrees of freedom for unequal spreads, so (unlike the classic Student's t-test) it does **not** assume equal variances. It is almost as powerful as Student's test when variances are equal and much more trustworthy when they are not, so it is a safe default (see @sec-welch; Delacre, Lakens, & Leys, 2017).
+- **Assumptions.** (1) Independence: each mouse is in one group and measured once, and mice do not influence each other; (2) the outcome is continuous; (3) the outcome is approximately normal **within each group** (checked with histograms, Q-Q plots, and the Shapiro–Wilk test); (4) no extreme outliers. We also compare the groups' spreads, but because Welch's test is used, equal variances are not required.
+- **Effect size.** The **raw difference** between means (in percentage points), and **Cohen's *d*** with a 95% confidence interval, $d = (\bar{x}_1 - \bar{x}_2)/s_{\text{pooled}}$. By convention, 0.2 is small, 0.5 is medium, and 0.8 is large, but these benchmarks should be interpreted in context.
+- **Confidence interval.** A 95% confidence interval for the mean difference.
+- **Robustness check.** A Wilcoxon rank-sum (Mann–Whitney) test, which does not assume normality.
+- **Software.** Analyses were run in `r R.version.string` using the tidyverse, `broom`, `rstatix`, `effectsize`, and `pwr`.
+
+## Power and sample size plan {#sec-power-plan}
+
+**Power** is the probability of rejecting $H_0$ when it is false. It depends on the effect size, the sample sizes, $\alpha$, and whether the test is one- or two-tailed. Good practice is to plan sample size *before* collecting data and to record the plan in your notebook. (Here, because this is a teaching template, we do the calculation alongside the data.)
+
+```{r}
+#| label: power-plan
+# A priori: how many mice PER GROUP for 80% power to detect a large effect (d = 0.8)?
+plan <- pwr.t.test(d = 0.8, sig.level = alpha, power = target_power,
+                   type = "two.sample", alternative = "two.sided")
+
+# Sensitivity: with the group sizes we actually have (unequal n), what is the
+# smallest effect we could detect with 80% power?
+sens <- pwr.t2n.test(n1 = n1, n2 = n2, sig.level = alpha, power = target_power,
+                     alternative = "two.sided")
+
+# Power to detect a large (d = 0.8) and a medium (d = 0.5) effect with our n
+power_large  <- pwr.t2n.test(n1 = n1, n2 = n2, d = 0.8, sig.level = alpha)$power
+power_medium <- pwr.t2n.test(n1 = n1, n2 = n2, d = 0.5, sig.level = alpha)$power
+```
+
+To detect a large effect ($d = 0.8$) with 80% power at $\alpha = .05$, we would need about **`r ceiling(plan$n)` mice per group** (always round up). With `r n1` and `r n2` mice, the smallest effect we could detect with 80% power is **$d$ = `r fmt_num(sens$d)`**. The power to detect a true large effect is about **`r round(100 * power_large)`%**, and for a medium effect about **`r round(100 * power_medium)`%**. This study was therefore **underpowered** for all but very large effects, which we should keep in mind when interpreting the results.
+
+# Results and Conclusions {#sec-results}
+
+## Exploratory data analysis {#sec-eda}
+
+Before running any test, we describe and plot the data for each group.
+
+```{r}
+#| label: tbl-desc
+#| tbl-cap: "Descriptive statistics for percent time in the open arms, by group"
+desc <- epm_clean |>
+  group_by(Group = group) |>
+  summarize(
+    n      = n(),
+    M      = mean(open_arm_pct),
+    SD     = sd(open_arm_pct),
+    SE     = SD / sqrt(n),
+    Median = median(open_arm_pct),
+    Min    = min(open_arm_pct),
+    Max    = max(open_arm_pct)
+  )
+
+desc |>
+  pub_table(digits = 2, align = "lcccccc")
+```
+
+```{r}
+#| label: desc-objects
+ctl <- desc |> filter(Group == "Control")
+strs <- desc |> filter(Group == "Stress")
+```
+
+@tbl-desc shows that control mice spent a mean of `r fmt_num(ctl$M)`% of the test in the open arms (*SD* = `r fmt_num(ctl$SD)`), compared with `r fmt_num(strs$M)`% for stress mice (*SD* = `r fmt_num(strs$SD)`). The spread of the two groups was similar.
+
+We also check the other variables, to see whether the groups were comparable on sex and general activity. A large difference in activity would make the open-arm result harder to interpret.
+
+```{r}
+#| label: tbl-covariates
+#| tbl-cap: "Sex composition and general activity (total arm entries) by group"
+epm_clean |>
+  group_by(Group = group) |>
+  summarize(
+    Females          = sum(sex == "Female"),
+    Males            = sum(sex == "Male"),
+    `Mean entries`   = mean(total_entries),
+    `SD of entries`  = sd(total_entries)
+  ) |>
+  pub_table(digits = 1, align = "lcccc")
+```
+
+The groups had similar sex balance and similar activity levels (@tbl-covariates), so activity differences are unlikely to explain any difference in open-arm time.
+
+```{r}
+#| label: fig-eda
+#| fig-cap: "Distribution of open-arm time in each group. (A) Histograms. (B) Normal Q-Q plots; points close to the line indicate approximate normality."
+#| fig-alt: "Two columns of paired panels, one row per group. Panel A shows histograms of percent time in the open arms for control and stress mice; the stress histogram is shifted left. Panel B shows normal Q-Q plots whose points fall close to a straight line in both groups."
+#| fig-height: 5
+p_hist <- ggplot(epm_clean, aes(open_arm_pct, fill = group)) +
+  geom_histogram(binwidth = 5, color = "white") +
+  facet_wrap(~ group, ncol = 1) +
+  scale_fill_manual(values = unname(pal[c("blue", "vermillion")])) +
+  labs(x = "Time in open arms (%)", y = "Number of mice") +
+  theme(legend.position = "none")
+
+p_qq <- ggplot(epm_clean, aes(sample = open_arm_pct, color = group)) +
+  stat_qq() +
+  stat_qq_line(color = "black") +
+  facet_wrap(~ group, ncol = 1) +
+  scale_color_manual(values = unname(pal[c("blue", "vermillion")])) +
+  labs(x = "Theoretical quantiles", y = "Sample quantiles") +
+  theme(legend.position = "none")
+
+p_hist + p_qq + plot_annotation(tag_levels = "A")
+```
+
+In this sample, both distributions (@fig-eda) are reasonably symmetric given how few mice there are in each group, and the stress group is shifted toward lower values. With groups this small, histograms are rough, so the Q-Q plots are more informative about normality.
+
+## Checking the assumptions {#sec-assumptions}
+
+```{r}
+#| label: assumptions
+shapiro_by_group <- epm_clean |>
+  group_by(Group = group) |>
+  reframe(tidy(shapiro.test(open_arm_pct)))
+
+sd_ratio <- max(desc$SD) / min(desc$SD)
+
+levene <- epm_clean |> levene_test(open_arm_pct ~ group)
+
+outliers <- epm_clean |>
+  group_by(group) |>
+  identify_outliers(open_arm_pct)
+```
+
+```{r}
+#| label: tbl-assumptions
+#| tbl-cap: "Shapiro–Wilk normality test within each group"
+shapiro_by_group |>
+  transmute(Group, W = statistic,
+            p = if_else(p.value < .001, "< .001", sub("^0", "", fmt_num(p.value, 3)))) |>
+  pub_table(digits = 3, align = "lcc")
+```
+
+- **Normality.** The Shapiro–Wilk test `r if (any(shapiro_by_group$p.value < alpha)) "indicated" else "did not indicate"` a departure from normality in either group (@tbl-assumptions), and the Q-Q plots (@fig-eda) agree.
+- **Spread.** The larger group SD was `r fmt_num(sd_ratio)` times the smaller one, a mild difference. Levene's test of equal variances was `r if (levene$p < alpha) "significant" else "not significant"`, *F*(`r levene$df1`, `r levene$df2`) = `r fmt_num(levene$statistic)`, `r fmt_p(levene$p, md = TRUE)`. We use Welch's test either way.
+- **Outliers.** `r nrow(outliers)` observations were flagged as outliers (more than 1.5 × IQR beyond the quartiles) within their groups.
+
+::: {.callout-warning}
+## A non-significant assumption test is not proof the assumption holds
+With small samples, tests such as Shapiro–Wilk and Levene have little power to detect problems, and with large samples they flag trivial ones. Judge the plots first and use the tests as supporting evidence. Also, choosing between Student's and Welch's test **based on** a preliminary variance test is not recommended, because the two-step procedure distorts error rates. Using Welch's test every time avoids the issue.
+:::
+
+## Hypothesis test {#sec-test}
+
+```{r}
+#| label: ttest
+# Formula interface: outcome ~ grouping variable. R subtracts the SECOND group
+# from the FIRST, so the difference is Control - Stress.
+tt <- t.test(open_arm_pct ~ group, data = epm_clean,
+             alternative = "two.sided", var.equal = FALSE,   # Welch
+             conf.level = 1 - alpha)
+
+tt_tidy <- tidy(tt)   # one-row data frame (broom package)
+
+t_value   <- tt_tidy$statistic
+t_df      <- tt_tidy$parameter       # Welch df is usually not a whole number
+p_value   <- tt_tidy$p.value
+mean_diff <- tt_tidy$estimate        # Control mean minus Stress mean
+ci_low    <- tt_tidy$conf.low
+ci_high   <- tt_tidy$conf.high
+
+# Effect size (effectsize:: is used explicitly because rstatix has a function
+# with the same name)
+d <- effectsize::cohens_d(open_arm_pct ~ group, data = epm_clean)
+g <- effectsize::hedges_g(open_arm_pct ~ group, data = epm_clean)
+```
+
+```{r}
+#| label: tbl-ttest
+#| tbl-cap: "Welch's two-sample t-test comparing open-arm time in control and stress mice"
+tt_tidy |>
+  transmute(
+    `Mean difference` = mean_diff,
+    `95% CI of difference` = paste0("[", fmt_num(ci_low), ", ", fmt_num(ci_high), "]"),
+    t  = t_value,
+    df = t_df,
+    p  = if_else(p_value < .001, "< .001", sub("^0", "", fmt_num(p_value, 3))),
+    `Cohen's d`   = fmt_num(d$Cohens_d),
+    `95% CI of d` = paste0("[", fmt_num(d$CI_low), ", ", fmt_num(d$CI_high), "]")
+  ) |>
+  pub_table(digits = 2, align = "c")
+```
+
+**Decision rule.** If $p < \alpha$, we reject $H_0$. Here `r fmt_p(p_value, md = TRUE)`, which is `r if (p_value < alpha) "less" else "not less"` than $\alpha$ = `r alpha`, so we **`r if (p_value < alpha) "reject" else "fail to reject"` $H_0$**.
+
+::: {.callout-important}
+## What a p-value is (and is not)
+The p-value is the probability of obtaining a difference at least this large **if $H_0$ were true**. It is *not* the probability that $H_0$ is true, not the probability the result happened "by chance," and not a measure of how large or important the effect is.
+:::
+
+## Effect size and confidence interval {#sec-effect}
+
+The p-value tells us whether a difference is *detectable*; the **effect size** tells us how *large* it is.
+
+- **Raw difference.** Control mice spent **`r fmt_num(abs(mean_diff))` percentage points** `r if (mean_diff > 0) "more" else "less"` of the test in the open arms than stress mice (95% CI [`r fmt_num(ci_low)`, `r fmt_num(ci_high)`]). Relative to the control mean, this is a difference of about **`r round(100 * abs(mean_diff) / ctl$M)`%**.
+- **Standardized difference.** Cohen's *d* was **`r fmt_num(d$Cohens_d)`** (95% CI [`r fmt_num(d$CI_low)`, `r fmt_num(d$CI_high)`]), conventionally described as a **`r effectsize::interpret_cohens_d(d$Cohens_d, rules = "cohen1988")`** effect. (Hedges' *g*, a small-sample correction, was `r fmt_num(g$Hedges_g)`.)
+
+The confidence interval for the difference `r if (ci_low > 0 || ci_high < 0) "does not include" else "includes"` 0, which agrees with the test decision. Notice also how wide the interval for *d* is (`r fmt_num(d$CI_low)` to `r fmt_num(d$CI_high)`): with only `r n1` and `r n2` mice, the true effect size is estimated imprecisely.
+
+```{r}
+#| label: fig-main
+#| fig-cap: "Time in the open arms of the elevated plus maze. (A) Each point is one mouse; boxes show the median and interquartile range; black markers show each group's mean with its 95% confidence interval. (B) The estimated mean difference (Control − Stress) with its 95% confidence interval; the dashed line marks no difference."
+#| fig-alt: "Panel A shows individual open-arm percentages for control and stress mice, with control mice higher on average, plus box plots and mean markers with confidence intervals. Panel B shows the mean difference between groups, about 8 percentage points, with a confidence interval that does not reach the dashed zero line."
+#| fig-width: 7
+#| fig-height: 4.5
+group_ci <- epm_clean |>
+  group_by(group) |>
+  summarize(m = mean(open_arm_pct), se = sd(open_arm_pct) / sqrt(n()),
+            n = n(), .groups = "drop") |>
+  mutate(lo = m - qt(0.975, n - 1) * se,
+         hi = m + qt(0.975, n - 1) * se)
+
+fig_a <- ggplot(epm_clean, aes(group, open_arm_pct, color = group, shape = group)) +
+  geom_boxplot(width = 0.35, outlier.shape = NA, color = "gray40", fill = NA) +
+  geom_jitter(width = 0.1, height = 0, size = 2.2, alpha = 0.8) +
+  geom_pointrange(data = group_ci,
+                  aes(x = group, y = m, ymin = lo, ymax = hi),
+                  position = position_nudge(x = 0.32), color = "black",
+                  shape = 16, size = 0.5, linewidth = 0.8, inherit.aes = FALSE) +
+  scale_color_manual(values = unname(pal[c("blue", "vermillion")])) +
+  labs(x = NULL, y = "Time in open arms (%)") +
+  theme(legend.position = "none")
+
+diff_df <- tibble(m = mean_diff, lo = ci_low, hi = ci_high)
+
+fig_b <- ggplot(diff_df, aes(x = "Control - Stress", y = m)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray30") +
+  geom_pointrange(aes(ymin = lo, ymax = hi), color = pal["green"],
+                  size = 0.7, linewidth = 1) +
+  labs(x = NULL, y = "Mean difference (percentage points)") +
+  theme(axis.ticks.x = element_blank())
+
+fig_a + fig_b + plot_layout(widths = c(2, 1)) + plot_annotation(tag_levels = "A")
+```
+
+## Power and sensitivity {#sec-power}
+
+The power curves in @fig-power show how power grows with the number of mice per group for small, medium, and large true effects.
+
+```{r}
+#| label: fig-power
+#| fig-cap: "Statistical power of a two-tailed two-sample t-test (α = .05) as a function of the number of mice per group, for small, medium, and large true effects. The dashed horizontal line marks 80% power."
+#| fig-alt: "Line graph of statistical power against mice per group for small, medium, and large effects. Power rises with sample size, fastest for the large effect, which reaches the 80 percent reference line at about 26 mice per group. The medium effect needs about 64 per group, and the small effect stays well below 80 percent."
+power_curve <- expand_grid(n = 5:80, d = c(0.2, 0.5, 0.8)) |>
+  mutate(
+    power   = map2_dbl(n, d, ~ pwr.t.test(n = .x, d = .y, sig.level = alpha,
+                                          type = "two.sample")$power),
+    d_label = factor(d, labels = c("Small (d = 0.2)", "Medium (d = 0.5)",
+                                   "Large (d = 0.8)"))
+  )
+
+ggplot(power_curve, aes(n, power, color = d_label, linetype = d_label)) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = target_power, linetype = "dashed") +
+  scale_color_manual(values = unname(pal[c("sky", "blue", "vermillion")])) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+  labs(x = "Mice per group", y = "Power",
+       color = "True effect size", linetype = "True effect size")
+```
+
+With `r n1` and `r n2` mice, the power to detect a true *large* effect ($d = 0.8$) was only about **`r round(100 * power_large)`%**. Even if the true effect were large, we would **miss it** (a Type II error) in roughly `r round(100 * (1 - power_large))`% of experiments like this one.
+
+::: {.callout-caution}
+## Significant results from small studies tend to exaggerate effects
+When power is low, the studies that *do* reach significance are, on average, the ones whose samples happened to show an unusually large difference. A significant result from an underpowered study therefore tends to **overestimate** the true effect (sometimes called the "winner's curse"). That is one reason to rely on the confidence interval, not just the point estimate, and to look for replication.
+:::
+
+::: {.callout-caution}
+## Avoid "observed power"
+Computing power from the effect size you just observed adds no information beyond the p-value (the two are mathematically linked) and is widely discouraged. Use the **sensitivity analysis** above (what could we detect?) and the **confidence interval** (what effects are compatible with our data?) instead.
+:::
+
+## Type I and Type II errors in action {#sec-sim}
+
+Error rates are long-run properties: they describe what would happen if we repeated the experiment many times. We can see this directly by **simulating** 10,000 experiments with the same group sizes (`r n1` and `r n2`), in two imaginary worlds where we know the truth:
+
+1. **$H_0$ is true.** The two groups have the same population mean.
+2. **$H_1$ is true.** The control mean is 0.8 standard deviations above the stress mean ($d = 0.8$, a large effect).
+
+In each simulated experiment we run Welch's t-test and record the p-value.
+
+```{r}
+#| label: simulate
+simulate_p_values <- function(n1, n2, diff, sd1, sd2, var_equal = FALSE,
+                              n_sims = 10000) {
+  map_dbl(seq_len(n_sims), function(i) {
+    x <- rnorm(n1, mean = diff, sd = sd1)   # "Control" group
+    y <- rnorm(n2, mean = 0,    sd = sd2)   # "Stress" group
+    t.test(x, y, var.equal = var_equal)$p.value
+  })
+}
+
+set.seed(123)   # makes the simulation reproducible
+sd_pooled <- sqrt(((n1 - 1) * ctl$SD^2 + (n2 - 1) * strs$SD^2) / (n1 + n2 - 2))
+d_true    <- 0.8
+
+p_h0 <- simulate_p_values(n1, n2, diff = 0,                   sd1 = sd_pooled, sd2 = sd_pooled)
+p_h1 <- simulate_p_values(n1, n2, diff = d_true * sd_pooled, sd1 = sd_pooled, sd2 = sd_pooled)
+
+sim_summary <- tibble(
+  World = c("H0 is true (no real difference)", "H1 is true (d = 0.8)"),
+  `Experiments with p < .05` = c(mean(p_h0 < alpha), mean(p_h1 < alpha)),
+  `What this rate is` = c("Type I error rate", "Power")
+)
+```
+
+```{r}
+#| label: tbl-sim
+#| tbl-cap: "Results of 10,000 simulated experiments (each with the same group sizes as the analyzed sample)"
+sim_summary |>
+  mutate(`Experiments with p < .05` = scales::percent(`Experiments with p < .05`,
+                                                      accuracy = 0.1)) |>
+  pub_table(align = "lcl")
+```
+
+```{r}
+#| label: fig-sim
+#| fig-cap: "Distribution of p-values across 10,000 simulated experiments. When H0 is true (left), p-values are spread evenly between 0 and 1, so about 5% fall below .05 (Type I errors). When a large real effect exists (right), p-values pile up near 0, but those to the right of the dashed line (p ≥ .05) are Type II errors."
+#| fig-alt: "Two histograms of p-values from 10,000 simulated experiments. When the null hypothesis is true, p-values are spread evenly from 0 to 1. When a large effect exists, p-values are concentrated near 0, but a substantial number still fall above .05."
+#| fig-width: 7
+#| fig-height: 3.5
+bind_rows(
+  tibble(p = p_h0, scenario = "H0 true (no real difference)"),
+  tibble(p = p_h1, scenario = "H1 true (d = 0.8)")
+) |>
+  ggplot(aes(p)) +
+  geom_histogram(breaks = seq(0, 1, 0.05), fill = pal["sky"], color = "white") +
+  geom_vline(xintercept = alpha, linetype = "dashed", color = pal["vermillion"]) +
+  facet_wrap(~ scenario) +
+  labs(x = "p-value", y = "Number of simulated experiments")
+```
+
+What @tbl-sim and @fig-sim teach us:
+
+- When $H_0$ is true, the t-test falsely rejects it in about **`r scales::percent(mean(p_h0 < alpha), accuracy = 0.1)`** of experiments, close to our chosen $\alpha$ of 5%. **The Type I error rate is something we set.**
+- When a large effect really exists, the test detects it only about **`r scales::percent(mean(p_h1 < alpha), accuracy = 0.1)`** of the time (its power), so it commits a Type II error in about **`r scales::percent(mean(p_h1 >= alpha), accuracy = 0.1)`**. **The Type II error rate depends on sample size, effect size, and variability.** It is reduced by studying more animals or by measuring more precisely.
+- Simulated rates have a little random error of their own: with 10,000 experiments, a rate near 5% is accurate to within about ±0.4 percentage points.
+- A single "significant" result does not tell you which world you are in. That is why effect sizes, confidence intervals, and replication matter.
+
+## Why Welch's test is the safer default {#sec-welch}
+
+The classic Student's t-test assumes the two groups have equal variances. What if that assumption is wrong **and** the group sizes are unequal? To find out, we simulate a world with **no true difference** (so $H_0$ is true, and any test should reject about 5% of the time). The smaller group (n = 10) is much more variable (SD = 15) than the larger group (n = 30, SD = 5).
+
+```{r}
+#| label: welch-sim
+set.seed(456)
+p_welch   <- simulate_p_values(n1 = 10, n2 = 30, diff = 0, sd1 = 15, sd2 = 5,
+                               var_equal = FALSE)
+p_student <- simulate_p_values(n1 = 10, n2 = 30, diff = 0, sd1 = 15, sd2 = 5,
+                               var_equal = TRUE)
+```
+
+```{r}
+#| label: tbl-welch
+#| tbl-cap: "Type I error rates when H0 is true but group variances and sizes are unequal (10,000 simulations)"
+tibble(
+  Test = c("Welch's t-test", "Student's t-test"),
+  `Experiments with p < .05` = scales::percent(c(mean(p_welch < alpha),
+                                                 mean(p_student < alpha)),
+                                               accuracy = 0.1)
+) |>
+  pub_table(align = "lc")
+```
+
+Welch's test keeps its Type I error rate close to the 5% we intended (**`r scales::percent(mean(p_welch < alpha), accuracy = 0.1)`**). Student's test falsely rejects $H_0$ in about **`r scales::percent(mean(p_student < alpha), accuracy = 0.1)`** of experiments, several times more often than its nominal rate, because its pooled variance is a poor summary when spreads differ. In our actual data the spreads are similar, so the two tests agree closely; but since we usually cannot be sure of that, Welch's test is the sensible default.
+
+## Robustness check
+
+If we are unsure about normality, we can confirm the conclusion with a test that does not assume it.
+
+```{r}
+#| label: wilcoxon
+wilcox <- wilcox.test(open_arm_pct ~ group, data = epm_clean, exact = FALSE) |>
+  tidy()
+```
+
+The Wilcoxon rank-sum test `r if ((wilcox$p.value < alpha) == (p_value < alpha)) "led to the same conclusion as" else "led to a different conclusion from"` Welch's t-test, *W* = `r wilcox$statistic`, `r fmt_p(wilcox$p.value, md = TRUE)`.
+
+## Results write-up {#sec-writeup}
+
+Below is how the result would be written in the Results section of a report. The numbers are inserted directly from the analysis (using inline R code), so they cannot be mistyped and they update automatically if the data change.
+
+::: {.callout-note icon=false appearance="simple"}
+### Results
+
+Of the `r n_recorded` mice tested, `r nrow(missing_mice)` stress mouse could not complete the test (it jumped off the maze) and was excluded, leaving `r n1` control and `r n2` stress mice for analysis. Control mice (*M* = `r fmt_num(ctl$M)`, *SD* = `r fmt_num(ctl$SD)`) spent `r if (p_value < alpha) "significantly" else "not significantly"` `r if (mean_diff > 0) "more" else "less"` time in the open arms than stress mice (*M* = `r fmt_num(strs$M)`, *SD* = `r fmt_num(strs$SD)`), Welch's *t*(`r fmt_num(t_df)`) = `r fmt_num(t_value)`, `r fmt_p(p_value, md = TRUE)`. The mean difference was `r fmt_num(mean_diff)` percentage points, 95% CI [`r fmt_num(ci_low)`, `r fmt_num(ci_high)`], a `r effectsize::interpret_cohens_d(d$Cohens_d, rules = "cohen1988")` effect (Cohen's *d* = `r fmt_num(d$Cohens_d)`, 95% CI [`r fmt_num(d$CI_low)`, `r fmt_num(d$CI_high)`]). Individual results are shown in @fig-main. The groups did not differ noticeably in general activity (mean arm entries: `r fmt_num(mean(epm_clean$total_entries[epm_clean$group == "Control"]), 1)` vs. `r fmt_num(mean(epm_clean$total_entries[epm_clean$group == "Stress"]), 1)`). A Wilcoxon rank-sum test, which does not assume normality, `r if ((wilcox$p.value < alpha) == (p_value < alpha)) "gave the same conclusion" else "gave a different conclusion"` (`r fmt_p(wilcox$p.value, md = TRUE)`).
+:::
+
+## Conclusions and limitations {#sec-conclusions}
+
+**Conclusion.** `r if (p_value < alpha) "The data provide evidence that mice exposed to chronic mild stress spent less time in the open arms of the elevated plus maze than control mice, consistent with increased anxiety-like behavior." else "The data do not provide sufficient evidence of a difference in open-arm time between stressed and control mice. This does not show that stress has no effect; the study may have been too small to detect a modest one."` The estimated effect was `r effectsize::interpret_cohens_d(d$Cohens_d, rules = "cohen1988")` in size, but its confidence interval was wide.
+
+::: {.callout-warning}
+## Re-read the interpretation if your data change
+The numbers and the reject/fail-to-reject wording above update automatically, but the *scientific interpretation* does not. If you change the data or the analysis, re-read this section and revise it in your own words.
+:::
+
+**Limitations.**
+
+- **Sample size.** With `r n1` and `r n2` mice, power for a large effect was only about `r round(100 * power_large)`%, and the confidence interval for the effect size is wide. Because the study is underpowered, the observed effect size may be an overestimate.
+- **Independence.** The t-test assumes each mouse is an independent observation. Mice housed in the same cage share an environment and may behave more alike than mice in different cages. In a real study, cage should be considered in the design or analysis.
+- **Missing data.** One mouse was lost. A complete-case analysis is reasonable if the loss is unrelated to the outcome, but if the most anxious mice are the ones that jump off the maze, the stress group's result could be biased.
+- **One measure of anxiety.** Open-arm time is only one behavioral indicator. Converging evidence from other tests would strengthen the conclusion.
+- **Simulated data.** These data were generated by a computer to illustrate the methods; they carry no real biological information.
+
+# A Guide to Writing Up Results {#sec-guide}
+
+A good results paragraph lets a reader understand and check what you did without seeing your code.
+
+**Always report**
+
+1. The **sample size in each group** analyzed (and any exclusions or missing data).
+2. **Descriptive statistics for each group**: the mean and standard deviation (*M*, *SD*).
+3. The **name of the test** (Welch's or Student's), the **test statistic with degrees of freedom**, the **exact p-value**, and the **direction** of the difference.
+4. The **raw mean difference with a confidence interval**, and a **standardized effect size** (such as Cohen's *d*) with a confidence interval.
+5. A reference to your **figure or table**, with the key pattern in words (do not just repeat every number).
+
+**Style tips**
+
+- Use past tense for what you did and found ("Control mice spent more time…").
+- Write statistics in italics: *M*, *SD*, *t*, *p*, *d*. Do not put a zero before a p-value (*p* = .008, not 0.008).
+- Report exact p-values rather than "p < .05"; use "*p* < .001" for very small ones.
+- Say which group was higher or lower. "The groups differed" is not enough.
+- Avoid "proves," "highly significant," or "trend toward significance." Say what you found and how large it was.
+- "Significant" means only that *p* < α. Use the effect size to talk about importance.
+
+**A fill-in-the-blank template**
+
+```
+[Group 1] (n = __, M = __, SD = __) [did / did not] differ significantly from
+[Group 2] (n = __, M = __, SD = __) in [outcome], Welch's t(__) = __, p = __.
+The mean difference was __ [units], 95% CI [__, __] (Cohen's d = __, 95% CI
+[__, __]), a [small / medium / large] effect.
+```
+
+**If the result is not significant**, say so plainly and do not conclude that there is "no difference." Report the confidence interval (which differences are still compatible with the data?) and the sensitivity analysis (what size of effect could the study detect?). For example, in this study the smallest effect detectable with 80% power was *d* = `r fmt_num(sens$d)`, so smaller (but possibly important) differences could not have been ruled out.
+
+**Further reading.** Delacre, M., Lakens, D., & Leys, C. (2017). Why psychologists should by default use Welch's t-test instead of Student's t-test. *International Review of Social Psychology, 30*(1), 92–101.
+
+# Your Turn {#sec-your-turn}
+
+Change one thing at a time, re-render, and describe in the notebook log (below) what changed and why.
+
+1. **Student vs. Welch.** Rerun the test with `var.equal = TRUE`. How much do the t statistic, degrees of freedom, and p-value change? Why are they so close here?
+2. **Missing data.** In the data preparation, replace the missing value with 0 instead of dropping it. How do the means, the test, and the effect size change? Why is this the wrong way to handle a missing value?
+3. **Sample size planning.** Use `pwr.t.test()` to find how many mice per group you would need for 90% power to detect $d = 0.8$, and for 80% power to detect $d = 0.5$. What does this say about studying subtle effects?
+4. **Unequal variances.** In the "Why Welch's test" simulation, change the SDs or group sizes (for example, make the *larger* group the more variable one). What happens to Student's Type I error rate? Can you find a setup where the two tests agree?
+5. **One-tailed test.** Add `alternative = "greater"` to `t.test()`. What happens to the p-value? When would that be justified, and when would it be questionable?
+6. **Housing.** Suppose the 29 mice lived in only 6 cages. Why might that affect the independence assumption, and how could you design the study or analysis to handle it?
+7. **Your own data.** Replace the CSV in `Data/` with a file of your own (one row per subject, one column per variable, one column that identifies the two groups), update the file and variable names, and write your own problem statement, methods, and conclusions.
+8. **Interpretation.** Rewrite the Conclusion paragraph in your own words. What would you do next to follow up on this finding?
+
+# Notebook Log {#sec-log}
+
+Keep a running record of decisions so that you (and your instructor) can see how the analysis developed. Add a row whenever you change something.
+
+```{r}
+#| label: tbl-log
+#| tbl-cap: "Analysis decision log (edit the rows below)"
+tribble(
+  ~Date,          ~`Decision or change`,                          ~Reason,
+  "YYYY-MM-DD",   "Chose Welch's two-tailed t-test, α = .05",     "Does not require equal variances; stress could change behavior in either direction",
+  "YYYY-MM-DD",   "Dropped mouse S09 (missing outcome)",          "Mouse jumped off the maze; test not completed; recorded as NA, not 0",
+  "",             "",                                             ""
+) |>
+  pub_table(align = "lll")
+```
+
+# Reproducibility {#sec-repro}
+
+The R and package versions used to create this notebook are listed below.
+
+```{r}
+#| label: session-info
+sessionInfo()
+```
