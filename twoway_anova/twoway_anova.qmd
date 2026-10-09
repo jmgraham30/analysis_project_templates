@@ -1,25 +1,764 @@
 ---
-title: "Untitled"
-format: html
+title: "Does Enriched Housing Protect Against Stress? A Two-Way ANOVA"
+subtitle: "Lab notebook template: two-way (factorial) analysis of variance (ANOVA)"
+author: "Your Name"
+date: today
+date-format: "MMMM D, YYYY"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: true
+    code-fold: show
+    code-tools: true
+    embed-resources: true
+    smooth-scroll: true
+    fig-width: 6.5
+    fig-height: 4.2
+    fig-dpi: 300
+    fig-align: center
+    tbl-cap-location: top
+execute:
+  echo: true
+  warning: false
+  message: false
 ---
 
-## Quarto
+::: {.callout-note icon=false}
+## How to use this notebook
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+This is a **template lab notebook** that walks through a complete analysis: a question, a plan, the data, the code, and a written report of the results. To make it yours:
 
-## Running Code
+1. Open `twoway_anova.Rproj` first (so RStudio uses this folder as the working directory).
+2. Replace `Your Name` in the header above with your name.
+3. Click **Render** to build the notebook. Every number, table, and figure is regenerated from the data and code. (This notebook runs 20,000 simulated experiments, so rendering takes a little longer than the earlier projects.)
+4. Read the text, then change things and re-render to see what happens (see @sec-your-turn).
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+The data are **simulated** for teaching purposes. No animals were tested.
+:::
+
+| Notebook details | |
+|:--|:--|
+| **Project** | Two-way (2 × 2, between-subjects) ANOVA |
+| **Data file** | `Data/bdnf_housing_stress.csv` |
+| **Analysis script** | `R/02_analysis.R` (same analysis, with extra teaching comments) |
+| **Helper code** | `R/00_setup.R` (packages, plot theme, formatting helpers) |
+| **Software** | `r R.version.string`; Quarto |
 
 ```{r}
-1 + 1
+#| label: setup
+# Load packages, the plot theme, and helper functions (see R/00_setup.R)
+source("R/00_setup.R")
 ```
 
-You can add options to executable code like this 
+# Problem Statement and Hypotheses {#sec-problem}
+
+## Background
+
+**Chronic stress** reduces **brain-derived neurotrophic factor (BDNF)**, a protein that supports the survival and plasticity of neurons, in the hippocampus. **Environmental enrichment** (larger cages with a running wheel, tunnels, and nesting material) is thought to protect the brain. A natural question is whether enrichment simply raises BDNF, or whether it specifically **buffers the brain against stress**.
+
+That second idea is a statement about an **interaction**: the effect of one factor (stress) depends on the level of the other factor (housing). A **two-way ANOVA** is designed to test exactly this.
+
+In this study, 40 mice were assigned to one of four groups made by crossing two factors: **housing** (standard or enriched) and **stress** (control or three weeks of chronic mild stress). This is called a **2 × 2 factorial design**: every combination of the factors appears in the study.
+
+## Problem statement
+
+> **Does hippocampal BDNF depend on housing, on stress, or on their combination?**
+
+A two-way ANOVA asks three questions at once, each answered with its own *F* test:
+
+1. **Main effect of housing:** Averaged over stress conditions, does mean BDNF differ between standard and enriched housing?
+2. **Main effect of stress:** Averaged over housing conditions, does mean BDNF differ between control and stressed mice?
+3. **Housing × stress interaction:** Is the effect of stress the same in both housing conditions?
+
+## Hypotheses
+
+For each of the three effects, the **null hypothesis** says there is no effect in the population:
+
+- $H_0$ (housing): the population mean BDNF is the same in standard and enriched housing, averaged over stress.
+- $H_0$ (stress): the population mean BDNF is the same in control and stressed mice, averaged over housing.
+- $H_0$ (interaction): the effect of stress on BDNF is the same in both housing conditions. In symbols, with $\mu_{\text{housing, stress}}$ for the four population cell means,
+
+$$
+H_0: \left(\mu_{\text{Std, Stress}} - \mu_{\text{Std, Control}}\right) = \left(\mu_{\text{Enr, Stress}} - \mu_{\text{Enr, Control}}\right)
+$$
+
+The alternative hypothesis for each effect is that it is not zero. We set the **significance level** at $\alpha = .05$ for each test.
+
+::: {.callout-tip}
+## What is an interaction?
+An interaction means "it depends." If enrichment protects against stress, the drop in BDNF caused by stress is **smaller** in enriched mice than in standard-housed mice. In a graph of the four cell means, the lines for the two housing conditions are **not parallel**. If there is no interaction, the effects simply add up and the lines are parallel.
+:::
+
+## Decision errors: Type I and Type II {#sec-errors}
+
+Any decision based on samples can be wrong. @tbl-errors shows the four possible outcomes of a hypothesis test.
 
 ```{r}
-#| echo: false
-2 * 2
+#| label: tbl-errors
+#| tbl-cap: "Possible outcomes of a hypothesis test"
+tribble(
+  ~Decision,                 ~`H0 is actually true`,                         ~`H0 is actually false`,
+  "Reject H0",               "Type I error (probability = α)",                "Correct decision (probability = power = 1 − β)",
+  "Fail to reject H0",       "Correct decision (probability = 1 − α)",        "Type II error (probability = β)"
+) |>
+  pub_table(align = "lcc")
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+- A **Type I error** (false positive) means concluding that an effect exists when, in the population, it does not. We control this rate for each test by choosing $\alpha$. A two-way ANOVA runs **three** tests, so the chance of *at least one* false positive when nothing is going on is larger than 5% (see @sec-sim).
+- A **Type II error** (false negative) means missing a real effect. Its probability is $\beta$, and **power** $= 1 - \beta$ is the probability of detecting a real effect of a given size. **Interactions are often the hardest effects to detect**, because they tend to be smaller than main effects.
+
+# Methods {#sec-methods}
+
+## Subjects and design
+
+Forty adult mice were randomly assigned to one of four groups of 10: **Standard housing / Control**, **Standard housing / Stress**, **Enriched housing / Control**, or **Enriched housing / Stress**. Each cell had five females and five males. *(Simulated data for teaching. In a real notebook, give the species/strain, age, source, how animals were randomized, and the approval number of your animal-care protocol.)*
+
+The design is a **2 × 2 between-subjects factorial**: both factors vary *between* mice (each mouse is in one cell and measured once). Cells of equal size make the design **balanced**, which makes the analysis simpler and the tests more robust.
+
+## Procedure
+
+Enriched cages contained a running wheel, tunnels, and extra nesting material; standard cages did not. Stressed mice received three weeks of chronic mild stress (for example, unpredictable cage tilts, damp bedding, and changes in light cycle); control mice were handled only. After the stress period, the hippocampus was removed and **BDNF protein** was measured by ELISA. *(In a real notebook, give the details of the housing and stress protocols, the tissue handling, the assay kit, and whether the experimenter was blind to condition. Blind testing protects against unintentional bias.)*
+
+## Outcome measure
+
+The outcome was **hippocampal BDNF concentration, in pg per mg of total protein** (a continuous measure; larger values mean more BDNF).
+
+## Data description {#sec-data}
+
+The raw data are stored in `Data/bdnf_housing_stress.csv` (one row per mouse). The raw file is **never edited by hand**: all cleaning and calculations are done in code so they are documented and repeatable.
+
+```{r}
+#| label: tbl-dictionary
+#| tbl-cap: "Variables in the raw data file"
+tribble(
+  ~Variable,       ~Type,         ~Description,
+  "mouse_id",      "Text",        "Unique animal identifier (M01–M40)",
+  "housing",       "Category",    "Housing condition: Standard or Enriched",
+  "stress",        "Category",    "Stress condition: Control or Stress",
+  "sex",           "Category",    "F = female, M = male",
+  "bdnf_pgmg",     "Number",      "Hippocampal BDNF, in pg per mg of protein"
+) |>
+  pub_table(align = "lll")
+```
+
+We import the data and immediately look at it: its structure, its ranges, and whether anything is missing or duplicated.
+
+```{r}
+#| label: import
+alpha        <- 0.05   # significance level (accepted Type I error rate)
+target_power <- 0.80   # conventional minimum power
+
+bdnf_raw <- read_csv(here("Data", "bdnf_housing_stress.csv"), show_col_types = FALSE)
+
+glimpse(bdnf_raw)
+```
+
+```{r}
+#| label: checks
+tibble(
+  `Rows`                 = nrow(bdnf_raw),
+  `Missing values`       = sum(is.na(bdnf_raw)),
+  `Duplicated mouse IDs` = sum(duplicated(bdnf_raw$mouse_id))
+) |>
+  pub_table(align = "ccc")
+```
+
+Both grouping variables must be **factors** with their levels in a meaningful order (the first level is the *reference*: Standard housing and Control). We also switch R to **sum-to-zero ("effect") coding**, which makes the ANOVA tests correct even when cells have unequal sizes ("Type III" tests). With equal cell sizes, as here, it does not change the results, but it is a good habit.
+
+```{r}
+#| label: prepare
+bdnf <- bdnf_raw |>
+  mutate(
+    housing = factor(housing, levels = c("Standard", "Enriched")),
+    stress  = factor(stress,  levels = c("Control", "Stress")),
+    sex     = factor(sex, levels = c("F", "M"), labels = c("Female", "Male")),
+    cell    = interaction(housing, stress, sep = " / ")   # one label per cell
+  )
+
+options(contrasts = c("contr.sum", "contr.poly"))
+
+N      <- nrow(bdnf)                                  # total number of mice
+n_cell <- unique(count(bdnf, housing, stress)$n)      # 10 (balanced design)
+```
+
+The final data set contains **N = `r N`** mice in four cells of **`r n_cell`**, with no missing values.
+
+# Statistical Analysis {#sec-stats}
+
+## Planned analysis
+
+- **Tests.** A 2 × 2 between-subjects ANOVA with three *F* tests (housing, stress, and their interaction), each at $\alpha = .05$. Each effect has $df = (1,\; N - 4)$ and
+$$F = \frac{MS_{\text{effect}}}{MS_{\text{error}}} = \frac{\text{variability explained by the effect}}{\text{variability among mice within the same cell}}.$$
+- **Order of interpretation.** We look at the **interaction first**. If the interaction is significant, the main effects describe averages that may not apply to either housing condition, so we follow up with **simple effects** (the effect of stress *within each* housing condition), with the **Holm** method adjusting for the two follow-up tests. If the interaction is not significant, the main effects can be interpreted directly.
+- **Assumptions.** (1) Independence: each mouse is in one cell and measured once; (2) the **residuals** (each mouse's distance from its own cell mean) are approximately normal; (3) the four cells have similar variances; (4) no extreme outliers. We check these with a Q-Q plot, a residuals-versus-fitted plot, the Shapiro–Wilk test, Levene's test, and an outlier screen.
+- **Effect size.** **Partial eta-squared** ($\eta^2_p$), the proportion of variability not explained by the other effects that is explained by this effect, with a 90% confidence interval (the convention for *F* tests); and **partial omega-squared** ($\omega^2_p$), a less biased version. By convention, .01, .06, and .14 are small, medium, and large. For follow-up comparisons we report mean differences with confidence intervals and Cohen's *d*.
+- **Robustness checks.** Welch *t*-tests and Wilcoxon rank-sum tests for the simple effects, and an ANOVA on the ranks of the data.
+- **Software.** Analyses were run in `r R.version.string` using the tidyverse, `broom`, `rstatix`, `emmeans`, `effectsize`, and `pwr`.
+
+## Power and sample size plan {#sec-power-plan}
+
+**Power** is the probability of rejecting $H_0$ when it is false. For an effect with 1 numerator degree of freedom, as in each test of a 2 × 2 ANOVA, power depends on the effect size (Cohen's $f^2 = \eta^2_p / (1 - \eta^2_p)$), the total sample size, and $\alpha$. We compute it directly from the noncentral *F* distribution. Good practice is to plan sample size *before* collecting data and to record the plan in your notebook. (Here, because this is a teaching template, we do the calculation alongside the data.)
+
+```{r}
+#| label: power-plan
+# Power of one F test (numerator df = 1) in a balanced 2 x 2 design.
+# noncentrality = f^2 * N,  df = (1, N - 4)
+power_2x2 <- function(f2, n, alpha = 0.05, cells = 4) {
+  N   <- n * cells
+  df2 <- N - cells
+  pf(qf(1 - alpha, 1, df2), 1, df2, ncp = f2 * N, lower.tail = FALSE)
+}
+f2_medium <- 0.25^2    # Cohen's "medium" f = .25
+f2_large  <- 0.40^2    # Cohen's "large"  f = .40
+
+# A priori: mice needed PER CELL for 80% power at a medium effect
+n_medium <- 3
+while (power_2x2(f2_medium, n_medium, alpha) < target_power) n_medium <- n_medium + 1
+
+# Sensitivity: smallest effect detectable with 80% power at our n per cell
+f2_min <- uniroot(function(f2) power_2x2(f2, n_cell, alpha) - target_power,
+                  interval = c(0.001, 5))$root
+
+power_medium <- power_2x2(f2_medium, n_cell, alpha)
+power_large  <- power_2x2(f2_large,  n_cell, alpha)
+```
+
+To detect a medium effect ($f = 0.25$) with 80% power at $\alpha = .05$, we would need about **`r n_medium` mice per cell** (`r 4 * n_medium` in total; always round up). With `r n_cell` mice per cell, the smallest effect we could detect with 80% power is **$f$ = `r fmt_num(sqrt(f2_min))`** (a large effect). Our power to detect a true *medium* effect is only about **`r round(100 * power_medium)`%**, and for a *large* ($f = 0.40$) effect about **`r round(100 * power_large)`%**. This study can reliably detect only large effects, and an interaction that is smaller than the main effects would be hard to detect.
+
+# Results and Conclusions {#sec-results}
+
+## Exploratory data analysis {#sec-eda}
+
+Before running any test, we describe and plot the data for each cell.
+
+```{r}
+#| label: tbl-desc
+#| tbl-cap: "Descriptive statistics for BDNF (pg/mg protein), by housing and stress condition"
+desc <- bdnf |>
+  group_by(Housing = housing, Stress = stress) |>
+  summarize(
+    n      = n(),
+    M      = mean(bdnf_pgmg),
+    SD     = sd(bdnf_pgmg),
+    SE     = SD / sqrt(n),
+    Median = median(bdnf_pgmg),
+    Min    = min(bdnf_pgmg),
+    Max    = max(bdnf_pgmg),
+    .groups = "drop"
+  )
+
+desc |>
+  pub_table(digits = 1, align = "llcccccc")
+```
+
+```{r}
+#| label: desc-helper
+# A small helper to pull one cell's row from the descriptive table
+gm <- function(h, s) filter(desc, Housing == h, Stress == s)
+```
+
+@tbl-desc shows that stress lowered mean BDNF in both housing conditions, but by very different amounts: from `r fmt_num(gm("Standard", "Control")$M, 1)` to `r fmt_num(gm("Standard", "Stress")$M, 1)` pg/mg in standard cages (a drop of `r fmt_num(gm("Standard", "Control")$M - gm("Standard", "Stress")$M, 1)`), but from `r fmt_num(gm("Enriched", "Control")$M, 1)` to `r fmt_num(gm("Enriched", "Stress")$M, 1)` in enriched cages (a drop of `r fmt_num(gm("Enriched", "Control")$M - gm("Enriched", "Stress")$M, 1)`). The cell standard deviations ranged from `r fmt_num(min(desc$SD), 1)` to `r fmt_num(max(desc$SD), 1)`.
+
+```{r}
+#| label: tbl-sex
+#| tbl-cap: "Number of females and males in each cell"
+bdnf |>
+  count(Housing = housing, Stress = stress, sex) |>
+  pivot_wider(names_from = sex, values_from = n) |>
+  pub_table(align = "llcc")
+```
+
+```{r}
+#| label: fig-eda
+#| fig-cap: "Hippocampal BDNF by stress condition and housing. Each point is one mouse; horizontal bars show the median."
+#| fig-alt: "Dot plot of BDNF for control and stressed mice, with standard-housed mice as blue circles and enriched-housed mice as orange triangles. Standard-housed mice show a large drop in BDNF under stress, while enriched mice show only a small drop."
+#| fig-width: 5.5
+#| fig-height: 4
+dodge <- position_dodge(width = 0.6)
+
+ggplot(bdnf, aes(stress, bdnf_pgmg, color = housing, shape = housing)) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.12, dodge.width = 0.6),
+             size = 2.3, alpha = 0.85) +
+  stat_summary(fun = median, geom = "crossbar", width = 0.45, linewidth = 0.4,
+               position = dodge, show.legend = FALSE) +
+  scale_color_manual(values = unname(pal[c("blue", "vermillion")])) +
+  labs(x = "Stress condition", y = "Hippocampal BDNF (pg/mg protein)",
+       color = "Housing", shape = "Housing")
+```
+
+In @fig-eda, the standard-housed mice show a large drop in BDNF with stress, while the enriched mice show a much smaller drop. That pattern (a difference that depends on the other factor) is what an interaction looks like. Our job is to test whether it is larger than chance would produce.
+
+## Checking the assumptions {#sec-assumptions}
+
+The ANOVA assumptions concern the **residuals**, so we first fit the model. In `aov()`, the formula `bdnf_pgmg ~ housing * stress` fits both main effects *and* their interaction (it is shorthand for `housing + stress + housing:stress`).
+
+```{r}
+#| label: fit
+fit <- aov(bdnf_pgmg ~ housing * stress, data = bdnf)
+
+res_df <- tibble(.fitted = fitted(fit), .resid = resid(fit))
+
+shapiro  <- shapiro.test(res_df$.resid) |> tidy()
+sd_ratio <- max(desc$SD) / min(desc$SD)
+levene   <- bdnf |> levene_test(bdnf_pgmg ~ cell)
+
+outliers <- bdnf |>
+  group_by(housing, stress) |>
+  identify_outliers(bdnf_pgmg)
+```
+
+```{r}
+#| label: fig-assumptions
+#| fig-cap: "Residual diagnostics for the two-way ANOVA. (A) Normal Q-Q plot of the residuals; points close to the line indicate approximate normality. (B) Residuals versus fitted values (the four cell means); a similar vertical spread in every cell supports equal variances."
+#| fig-alt: "Two panels. Panel A is a normal Q-Q plot of residuals whose points fall close to a straight line. Panel B plots residuals against fitted values for the four cells; the vertical spread is similar across the four cell means."
+#| fig-width: 7
+#| fig-height: 3.5
+p_qq <- ggplot(res_df, aes(sample = .resid)) +
+  stat_qq(color = pal["blue"]) +
+  stat_qq_line(color = "black") +
+  labs(x = "Theoretical quantiles", y = "Residuals")
+
+p_res <- ggplot(res_df, aes(.fitted, .resid)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point(color = pal["blue"], size = 2, alpha = 0.8) +
+  labs(x = "Fitted values (cell means)", y = "Residuals")
+
+p_qq + p_res + plot_annotation(tag_levels = "A")
+```
+
+- **Normality.** The Q-Q plot (@fig-assumptions A) is close to the line, and the Shapiro–Wilk test `r if (shapiro$p.value < alpha) "indicated" else "did not indicate"` a departure from normality, *W* = `r fmt_num(shapiro$statistic, 3)`, `r fmt_p(shapiro$p.value, md = TRUE)`.
+- **Equal variances.** The largest cell SD was **`r fmt_num(sd_ratio)` times** the smallest, well under the rule-of-thumb limit of about 2. The residual plot (@fig-assumptions B) shows similar spread in every cell. Levene's test was `r if (levene$p < alpha) "significant" else "not significant"`, *F*(`r levene$df1`, `r levene$df2`) = `r fmt_num(levene$statistic)`, `r fmt_p(levene$p, md = TRUE)`.
+- **Outliers.** `r if (nrow(outliers) == 0) "No observations were flagged as outliers (beyond 1.5 × IQR from the quartiles within a cell)." else paste0(nrow(outliers), " observation(s) (", paste(outliers$mouse_id, collapse = ', '), ") were flagged as outliers (beyond 1.5 × IQR from the quartiles within a cell). Decide whether to keep them using a rule set in advance; do not remove data only because they are inconvenient.")`
+
+::: {.callout-warning}
+## A non-significant assumption test is not proof the assumption holds
+With small samples, tests such as Shapiro–Wilk and Levene have little power to detect problems, and with large samples they flag trivial ones. Judge the plots first and use the tests as supporting evidence.
+:::
+
+## The ANOVA table: three *F* tests {#sec-test}
+
+```{r}
+#| label: anova
+anova_tbl <- tidy(fit)
+df_error  <- anova_tbl$df[anova_tbl$term == "Residuals"]
+
+get_row   <- function(term) filter(anova_tbl, .data$term == !!term)
+a_housing <- get_row("housing")
+a_stress  <- get_row("stress")
+a_inter   <- get_row("housing:stress")
+```
+
+```{r}
+#| label: tbl-anova
+#| tbl-cap: "Two-way ANOVA of hippocampal BDNF by housing and stress"
+anova_tbl |>
+  transmute(
+    Source = case_match(term,
+                        "housing"        ~ "Housing",
+                        "stress"         ~ "Stress",
+                        "housing:stress" ~ "Housing × Stress",
+                        "Residuals"      ~ "Residuals (error)"),
+    df,
+    `Sum of squares` = sumsq,
+    `Mean square`    = meansq,
+    F = statistic,
+    p = if_else(is.na(p.value), "", fmt_p_col(p.value))
+  ) |>
+  mutate(F = if_else(is.na(F), "", fmt_num(F))) |>
+  pub_table(digits = 1, align = "lccccc")
+```
+
+Each effect is tested against the same error term (mean square = `r fmt_num(anova_tbl$meansq[anova_tbl$term == "Residuals"], 1)`, the average variability among mice within cells). The results:
+
+- **Housing:** *F*(`r a_housing$df`, `r df_error`) = `r fmt_num(a_housing$statistic)`, `r fmt_p(a_housing$p.value, md = TRUE)`.
+- **Stress:** *F*(`r a_stress$df`, `r df_error`) = `r fmt_num(a_stress$statistic)`, `r fmt_p(a_stress$p.value, md = TRUE)`.
+- **Housing × Stress interaction:** *F*(`r a_inter$df`, `r df_error`) = `r fmt_num(a_inter$statistic)`, `r fmt_p(a_inter$p.value, md = TRUE)`.
+
+**Decision rule.** For each test, if $p < \alpha$ we reject that $H_0$. The interaction is the key test here: its $p$ is `r if (a_inter$p.value < alpha) "less" else "not less"` than $\alpha$ = `r alpha`, so we **`r if (a_inter$p.value < alpha) "reject" else "fail to reject"`** the null hypothesis of no interaction: `r if (a_inter$p.value < alpha) "the data are not consistent with the effect of stress being the same in both housing conditions. Because of this, the main effects must be interpreted with care: they are averages over two conditions in which the effect of stress is different." else "we do not have evidence that the effect of stress depends on housing, and we can interpret the main effects directly."`
+
+::: {.callout-important}
+## What a p-value is (and is not)
+The p-value is the probability of obtaining an *F* statistic at least this large **if $H_0$ were true**. It is *not* the probability that $H_0$ is true, and it says nothing about how large the effect is or *where* the differences are.
+:::
+
+::: {.callout-caution}
+## Why a significant interaction changes how you read the main effects
+A main effect is an *average*. Here, the "stress effect" averages a large drop (standard cages) and a small one (enriched cages), which describes neither group well. When the interaction is significant, report and interpret the **simple effects** (@sec-simple), and treat the main effects as secondary.
+:::
+
+## Effect sizes {#sec-effect}
+
+```{r}
+#| label: effect-size
+eta2   <- eta_squared(fit,   partial = TRUE, ci = 0.90, alternative = "two.sided")
+omega2 <- omega_squared(fit, partial = TRUE, ci = 0.90, alternative = "two.sided")
+f_eff  <- cohens_f(fit,      partial = TRUE, ci = 0.90, alternative = "two.sided")
+
+pe <- set_names(eta2$Eta2_partial, eta2$Parameter)   # partial eta-squared by effect
+```
+
+```{r}
+#| label: tbl-effect
+#| tbl-cap: "Effect sizes for each effect (with 90% confidence intervals)"
+tibble(
+  Effect = c("Housing", "Stress", "Housing × Stress"),
+  `Partial η²` = fmt_apa(eta2$Eta2_partial),
+  `90% CI of η²` = paste0("[", fmt_apa(eta2$CI_low), ", ", fmt_apa(eta2$CI_high), "]"),
+  `Partial ω²` = fmt_apa(omega2$Omega2_partial),
+  `Cohen's f` = fmt_num(f_eff$Cohens_f)
+) |>
+  pub_table(align = "lcccc")
+```
+
+Housing explained about **`r round(100 * pe["housing"])`%** of the variability not accounted for by the other effects (partial $\eta^2$ = `r fmt_apa(pe["housing"])`), stress about **`r round(100 * pe["stress"])`%** (`r fmt_apa(pe["stress"])`), and the interaction about **`r round(100 * pe["housing:stress"])`%** (`r fmt_apa(pe["housing:stress"])`, 90% CI [`r fmt_apa(eta2$CI_low[3])`, `r fmt_apa(eta2$CI_high[3])`]). By the usual benchmarks, these are `r interpret_eta_squared(pe["housing"], rules = "field2013")` (housing), `r interpret_eta_squared(pe["stress"], rules = "field2013")` (stress), and `r interpret_eta_squared(pe["housing:stress"], rules = "field2013")` (interaction) effects. The interaction's confidence interval is wide, so its size is estimated imprecisely.
+
+## Interaction and simple effects {#sec-simple}
+
+To understand the interaction we compare stress with control **separately within each housing condition** (the "simple effects" of stress). With two follow-up tests we adjust the *p*-values with the **Holm** method. Each difference is (Stress) minus (Control), so a **negative** difference means stress lowered BDNF.
+
+```{r}
+#| label: simple
+emm_cells      <- emmeans(fit, ~ housing * stress)    # the four cell means
+emm_by_housing <- emmeans(fit, ~ stress | housing)
+
+simple_tbl <- contrast(emm_by_housing, method = "revpairwise", adjust = "none") |>
+  rbind(adjust = "holm") |>                 # Holm adjustment across the 2 tests
+  summary(infer = TRUE) |>
+  as_tibble()
+
+simple_d <- eff_size(emm_by_housing, sigma = sigma(fit), edf = df.residual(fit),
+                     method = "revpairwise") |>
+  as_tibble()
+
+simple <- left_join(simple_tbl,
+                    select(simple_d, housing, d = effect.size, d_low = lower.CL, d_high = upper.CL),
+                    by = "housing")
+
+# The interaction contrast: (Stress - Control in Enriched) - (Stress - Control in Standard)
+int_contrast <- contrast(emm_cells, interaction = c("revpairwise", "revpairwise")) |>
+  summary(infer = TRUE) |>
+  as_tibble()
+
+s_std <- filter(simple, housing == "Standard")
+s_enr <- filter(simple, housing == "Enriched")
+```
+
+```{r}
+#| label: tbl-simple
+#| tbl-cap: "Simple effects: effect of stress on BDNF (pg/mg) within each housing condition"
+simple |>
+  transmute(
+    Housing = housing,
+    `Stress minus Control` = estimate,
+    `95% CI (Holm-adjusted)` = paste0("[", fmt_num(lower.CL, 1), ", ", fmt_num(upper.CL, 1), "]"),
+    `Adjusted p` = fmt_p_col(p.value),
+    `Cohen's d` = fmt_num(d),
+    `95% CI of d` = paste0("[", fmt_num(d_low), ", ", fmt_num(d_high), "]")
+  ) |>
+  pub_table(digits = 1, align = "lccccc")
+```
+
+In **standard cages**, stress lowered BDNF by **`r fmt_num(abs(s_std$estimate), 1)` pg/mg** (Holm-adjusted 95% CI [`r fmt_num(s_std$lower.CL, 1)`, `r fmt_num(s_std$upper.CL, 1)`], `r fmt_p(s_std$p.value, md = TRUE)`, Cohen's *d* = `r fmt_num(s_std$d)`). In **enriched cages**, the change was **`r fmt_num(s_enr$estimate, 1)` pg/mg** (95% CI [`r fmt_num(s_enr$lower.CL, 1)`, `r fmt_num(s_enr$upper.CL, 1)`], `r fmt_p(s_enr$p.value, md = TRUE)`, *d* = `r fmt_num(s_enr$d)`). The **difference between these two stress effects** (the interaction contrast) was `r fmt_num(int_contrast$estimate, 1)` pg/mg, 95% CI [`r fmt_num(int_contrast$lower.CL, 1)`, `r fmt_num(int_contrast$upper.CL, 1)`].
+
+::: {.callout-caution}
+## "Not significant" does not mean "no effect"
+The stress effect in enriched cages was not significant, but its confidence interval is wide and includes both no effect and a sizable drop. We cannot conclude that enriched mice are *completely* protected, only that this study found less evidence of a drop. The claim that "the effect differs between conditions" is supported by the **interaction test**, not by one simple effect being significant and the other not.
+:::
+
+```{r}
+#| label: fig-main
+#| fig-cap: "Effect of housing and stress on hippocampal BDNF. (A) Interaction plot: small symbols are individual mice; large symbols with lines show each cell's mean and 95% confidence interval. Non-parallel lines indicate an interaction. (B) The effect of stress (Stress minus Control) within each housing condition, with Holm-adjusted 95% confidence intervals; an interval that excludes the dashed zero line indicates a significant effect."
+#| fig-alt: "Panel A: lines joining the control and stress means for standard housing (blue, solid, circles) and enriched housing (orange, dashed, triangles). The standard line falls steeply from control to stress; the enriched line is nearly flat, so the lines are not parallel. Panel B: the stress effect in standard housing is a large negative value whose interval excludes zero; in enriched housing it is a small negative value whose interval includes zero."
+#| fig-width: 9
+#| fig-height: 4.5
+cell_ci <- as_tibble(summary(emm_cells))   # emmean, SE, df, lower.CL, upper.CL
+
+fig_a <- ggplot(bdnf, aes(stress, bdnf_pgmg, color = housing, shape = housing,
+                          linetype = housing, group = housing)) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.1, dodge.width = 0.5),
+             size = 1.8, alpha = 0.45) +
+  geom_line(data = cell_ci, aes(y = emmean), position = position_dodge(width = 0.5),
+            linewidth = 0.9) +
+  geom_pointrange(data = cell_ci, aes(y = emmean, ymin = lower.CL, ymax = upper.CL),
+                  position = position_dodge(width = 0.5), size = 0.6, linewidth = 0.9) +
+  scale_color_manual(values = unname(pal[c("blue", "vermillion")])) +
+  labs(x = "Stress condition", y = "Hippocampal BDNF (pg/mg protein)",
+       color = "Housing", shape = "Housing", linetype = "Housing")
+
+fig_b <- simple_tbl |>
+  mutate(housing = factor(housing, levels = c("Standard", "Enriched"))) |>
+  ggplot(aes(estimate, housing, color = housing, shape = housing)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray30") +
+  geom_pointrange(aes(xmin = lower.CL, xmax = upper.CL), size = 0.6, linewidth = 0.9) +
+  scale_color_manual(values = unname(pal[c("blue", "vermillion")])) +
+  scale_y_discrete(limits = rev) +
+  labs(x = "Effect of stress on BDNF (pg/mg)\nwith Holm-adjusted 95% CI", y = "Housing") +
+  theme(legend.position = "none")
+
+fig_a + fig_b + plot_layout(widths = c(1.2, 1)) + plot_annotation(tag_levels = "A")
+```
+
+## Power and sensitivity {#sec-power}
+
+The power curves in @fig-power show how power grows with the number of mice per cell for small, medium, and large true effects. The dotted vertical line marks our sample size.
+
+```{r}
+#| label: fig-power
+#| fig-cap: "Statistical power of each F test in a 2 × 2 ANOVA (α = .05) as a function of the number of mice per cell, for small, medium, and large true effects. The dashed horizontal line marks 80% power; the dotted vertical line marks the present sample size."
+#| fig-alt: "Line graph of statistical power against mice per cell for small, medium, and large effects. Power rises with sample size, fastest for the large effect. At 10 mice per cell, power is about 70 percent for a large effect and about 34 percent for a medium effect, below the 80 percent reference line."
+power_curve <- expand_grid(n = 3:80, f = c(0.10, 0.25, 0.40)) |>
+  mutate(
+    power   = map2_dbl(n, f, ~ power_2x2(.y^2, .x, alpha)),
+    f_label = factor(f, labels = c("Small (f = 0.10)", "Medium (f = 0.25)",
+                                   "Large (f = 0.40)"))
+  )
+
+ggplot(power_curve, aes(n, power, color = f_label, linetype = f_label)) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = target_power, linetype = "dashed") +
+  geom_vline(xintercept = n_cell, linetype = "dotted") +
+  scale_color_manual(values = unname(pal[c("sky", "blue", "vermillion")])) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+  labs(x = "Mice per cell", y = "Power",
+       color = "True effect size", linetype = "True effect size")
+```
+
+With `r n_cell` mice per cell, power was `r round(100 * power_large)`% for a large effect and only `r round(100 * power_medium)`% for a medium one. **Interactions are often smaller than main effects**, so a study sized for the main effects is often underpowered for the interaction, which may be the question of greatest interest.
+
+::: {.callout-caution}
+## Significant results from small studies tend to exaggerate effects
+When power is low, the studies that *do* reach significance are, on average, the ones whose samples happened to show an unusually large effect. A significant result from a small study therefore tends to **overestimate** the true effect (sometimes called the "winner's curse"). Rely on the confidence intervals, not just the point estimates, and look for replication.
+:::
+
+::: {.callout-caution}
+## Avoid "observed power"
+Computing power from the effect size you just observed adds no information beyond the p-value and is widely discouraged. Use the **sensitivity analysis** above (what could we detect?) and the **confidence intervals** (what effects are compatible with our data?) instead.
+:::
+
+## Type I and Type II errors in action {#sec-sim}
+
+Error rates are long-run properties: they describe what would happen if we repeated the experiment many times. We can see this directly by **simulating** 10,000 experiments (four cells of `r n_cell` mice each) in two imaginary worlds where we know the truth:
+
+1. **No effects at all** (all four population means are equal), so every rejection is a Type I error.
+2. **The true pattern used to generate these data**: a large drop with stress in standard cages (30 units), a small drop in enriched cages (6 units), and enriched mice higher overall.
+
+In each simulated experiment we run all three *F* tests. (For speed, the statistics are computed directly from the four cell means and the pooled variance, which for a balanced 2 × 2 design is exactly what the ANOVA *F* tests use.)
+
+```{r}
+#| label: simulate
+simulate_2x2 <- function(means, sd, n, n_sims = 10000) {
+  # means: Standard/Control, Standard/Stress, Enriched/Control, Enriched/Stress
+  df2 <- 4 * (n - 1)
+  results <- map(seq_len(n_sims), function(i) {
+    x   <- matrix(rnorm(4 * n, mean = rep(means, each = n), sd = sd), nrow = n)
+    m   <- colMeans(x)
+    mse <- mean(apply(x, 2, var))
+    # Each effect is a contrast of the cell means; SS = n * contrast^2 / 4
+    ss_housing <- n * (m[3] + m[4] - m[1] - m[2])^2 / 4
+    ss_stress  <- n * (m[2] + m[4] - m[1] - m[3])^2 / 4
+    ss_inter   <- n * (m[1] - m[2] - m[3] + m[4])^2 / 4
+    c(housing     = pf(ss_housing / mse, 1, df2, lower.tail = FALSE),
+      stress      = pf(ss_stress  / mse, 1, df2, lower.tail = FALSE),
+      interaction = pf(ss_inter   / mse, 1, df2, lower.tail = FALSE))
+  })
+  as_tibble(do.call(rbind, results))   # one row per simulated experiment
+}
+
+set.seed(123)                                   # makes the simulation reproducible
+sd_within <- sqrt(anova_tbl$meansq[anova_tbl$term == "Residuals"])   # our pooled SD
+
+sim_h0   <- simulate_2x2(rep(100, 4),           sd_within, n_cell)
+sim_true <- simulate_2x2(c(100, 70, 108, 102), sd_within, n_cell)
+
+rates <- function(sim) {
+  summarize(sim,
+            any_effect = mean(housing < alpha | stress < alpha | interaction < alpha),
+            across(c(housing, stress, interaction), ~ mean(.x < alpha))) |>
+    relocate(any_effect, .after = last_col())
+}
+sim_summary <- bind_rows(`No effects at all (H0 true)` = rates(sim_h0),
+                         `True pattern (interaction present)` = rates(sim_true),
+                         .id = "world")
+```
+
+```{r}
+#| label: tbl-sim
+#| tbl-cap: "Percent of 10,000 simulated experiments with p < .05 (four cells of 10 mice)"
+sim_summary |>
+  mutate(across(-world, ~ scales::percent(.x, accuracy = 0.1))) |>
+  rename(World = world,
+         Housing = housing, Stress = stress, Interaction = interaction,
+         `At least one of the three tests` = any_effect) |>
+  pub_table(align = "lcccc")
+```
+
+How to read @tbl-sim:
+
+- **In the first row ($H_0$ is true), every percentage is a Type I error rate.** Each test falsely "finds something" in about **`r scales::percent(sim_summary$housing[1], accuracy = 0.1)`**, **`r scales::percent(sim_summary$stress[1], accuracy = 0.1)`**, and **`r scales::percent(sim_summary$interaction[1], accuracy = 0.1)`** of experiments, close to our chosen 5%. But the chance that **at least one of the three** is significant is about **`r scales::percent(sim_summary$any_effect[1], accuracy = 0.1)`**, close to the $1 - 0.95^3 \approx 14\%$ expected from running three tests.
+- **In the second row ($H_1$ is true), the percentages are power.** The simulated tests detect the housing and stress effects in about **`r scales::percent(sim_summary$housing[2], accuracy = 0.1)`** and **`r scales::percent(sim_summary$stress[2], accuracy = 0.1)`** of experiments, but the interaction in only about **`r scales::percent(sim_summary$interaction[2], accuracy = 0.1)`**. In the other **`r scales::percent(1 - sim_summary$interaction[2], accuracy = 0.1)`**, we would commit a Type II error for the interaction. Our own experiment detected it, but about one experiment in three like it would have missed it.
+- Simulated rates have a little random error of their own: with 10,000 experiments, a rate near 5% is accurate to within about ±0.4 percentage points.
+
+```{r}
+#| label: fig-error
+#| fig-cap: "When there are truly no effects, the chance of a false positive for each of the three tests stays near the intended 5% (dashed line), but the chance that at least one of the three tests is significant is about 14%."
+#| fig-alt: "Bar chart of false-positive rates. The bars for housing, stress, and interaction are each near the dashed 5 percent line. The bar for at least one of the three tests is about 14 percent, nearly three times higher."
+#| fig-width: 6
+#| fig-height: 4
+sim_summary |>
+  filter(world == "No effects at all (H0 true)") |>
+  pivot_longer(-world, names_to = "test", values_to = "rate") |>
+  mutate(test = factor(test,
+           levels = c("housing", "stress", "interaction", "any_effect"),
+           labels = c("Housing", "Stress", "Interaction", "At least one\nof the three"))) |>
+  ggplot(aes(test, rate, fill = test)) +
+  geom_col(width = 0.6) +
+  geom_hline(yintercept = alpha, linetype = "dashed") +
+  scale_fill_manual(values = unname(pal[c("blue", "orange", "green", "vermillion")])) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 0.2)) +
+  labs(x = NULL, y = "Chance of a false positive") +
+  theme(legend.position = "none")
+```
+
+::: {.callout-tip}
+## The more effects you test, the more likely a false alarm
+Every additional test is another chance for a false positive. A two-way ANOVA tests three effects, and a three-way ANOVA tests seven. This is one reason to decide *in advance* which effects you care about and to be cautious about an unexpected "significant" result in a design with many factors.
+:::
+
+## Robustness checks {#sec-robust}
+
+We confirm the conclusion with analyses that relax the assumptions: Welch *t*-tests and Wilcoxon rank-sum tests for the two simple effects (Holm-adjusted), and an ANOVA on the ranks of the data.
+
+```{r}
+#| label: robust
+welch_simple <- bdnf |>
+  group_by(housing) |>
+  reframe(tidy(t.test(bdnf_pgmg ~ stress, var.equal = FALSE))) |>
+  mutate(effect = -estimate,                      # t.test gives Control - Stress; flip it
+         p_holm = p.adjust(p.value, method = "holm"))
+
+wilcox_simple <- bdnf |>
+  group_by(housing) |>
+  reframe(tidy(wilcox.test(bdnf_pgmg ~ stress, exact = FALSE))) |>
+  mutate(p_holm = p.adjust(p.value, method = "holm"))
+
+rank_anova <- aov(rank(bdnf_pgmg) ~ housing * stress, data = bdnf) |> tidy()
+rank_inter <- rank_anova |> filter(term == "housing:stress")
+```
+
+```{r}
+#| label: tbl-robust
+#| tbl-cap: "Robustness checks for the simple effects of stress (Holm-adjusted p-values)"
+tibble(
+  Housing = welch_simple$housing,
+  `Welch t-test: Stress minus Control` = fmt_num(welch_simple$effect, 1),
+  `Welch adjusted p` = fmt_p_col(welch_simple$p_holm),
+  `Wilcoxon adjusted p` = fmt_p_col(wilcox_simple$p_holm)
+) |>
+  pub_table(align = "lccc")
+```
+
+The Welch and Wilcoxon tests give the same pattern as the main analysis. A significant stress effect in standard cages: `r if (welch_simple$p_holm[welch_simple$housing == "Standard"] < alpha && wilcox_simple$p_holm[wilcox_simple$housing == "Standard"] < alpha) "yes, in both checks" else "not in both checks"`. A significant stress effect in enriched cages: `r if (welch_simple$p_holm[welch_simple$housing == "Enriched"] < alpha || wilcox_simple$p_holm[wilcox_simple$housing == "Enriched"] < alpha) "yes, in at least one check" else "no, in neither check"`. The ANOVA on ranks gave an interaction of *F*(`r rank_inter$df`, `r df_error`) = `r fmt_num(rank_inter$statistic)`, `r fmt_p(rank_inter$p.value, md = TRUE)`, `r if ((rank_inter$p.value < alpha) == (a_inter$p.value < alpha)) "which agrees with" else "which does not agree with"` the main analysis. (The rank-based ANOVA is only a rough check; it is not a replacement for the main analysis.)
+
+## Results write-up {#sec-writeup}
+
+Below is how the result would be written in the Results section of a report. The numbers are inserted directly from the analysis (using inline R code), so they cannot be mistyped and they update automatically if the data change.
+
+::: {.callout-note icon=false appearance="simple"}
+### Results
+
+Forty mice (10 per cell) were included in the analysis. A 2 (housing: standard, enriched) × 2 (stress: control, stress) between-subjects ANOVA showed a `r if (a_housing$p.value < alpha) "significant" else "non-significant"` main effect of housing, *F*(`r a_housing$df`, `r df_error`) = `r fmt_num(a_housing$statistic)`, `r fmt_p(a_housing$p.value, md = TRUE)`, $\eta^2_p$ = `r fmt_apa(pe["housing"])`, a `r if (a_stress$p.value < alpha) "significant" else "non-significant"` main effect of stress, *F*(`r a_stress$df`, `r df_error`) = `r fmt_num(a_stress$statistic)`, `r fmt_p(a_stress$p.value, md = TRUE)`, $\eta^2_p$ = `r fmt_apa(pe["stress"])`, and a `r if (a_inter$p.value < alpha) "significant" else "non-significant"` housing × stress interaction, *F*(`r a_inter$df`, `r df_error`) = `r fmt_num(a_inter$statistic)`, `r fmt_p(a_inter$p.value, md = TRUE)`, $\eta^2_p$ = `r fmt_apa(pe["housing:stress"])`, 90% CI [`r fmt_apa(eta2$CI_low[3])`, `r fmt_apa(eta2$CI_high[3])`]. Because of the interaction, we examined the effect of stress within each housing condition (Holm-adjusted; see @fig-main). In standard cages, stress `r if (s_std$p.value < alpha) "significantly lowered" else "did not significantly change"` BDNF (*M*<sub>control</sub> = `r fmt_num(gm("Standard", "Control")$M, 1)`, *SD* = `r fmt_num(gm("Standard", "Control")$SD, 1)`; *M*<sub>stress</sub> = `r fmt_num(gm("Standard", "Stress")$M, 1)`, *SD* = `r fmt_num(gm("Standard", "Stress")$SD, 1)`; difference = `r fmt_num(s_std$estimate, 1)` pg/mg, 95% CI [`r fmt_num(s_std$lower.CL, 1)`, `r fmt_num(s_std$upper.CL, 1)`], `r fmt_p(s_std$p.value, md = TRUE)`, Cohen's *d* = `r fmt_num(s_std$d)`). In enriched cages, stress `r if (s_enr$p.value < alpha) "significantly lowered" else "did not significantly change"` BDNF (*M*<sub>control</sub> = `r fmt_num(gm("Enriched", "Control")$M, 1)`, *SD* = `r fmt_num(gm("Enriched", "Control")$SD, 1)`; *M*<sub>stress</sub> = `r fmt_num(gm("Enriched", "Stress")$M, 1)`, *SD* = `r fmt_num(gm("Enriched", "Stress")$SD, 1)`; difference = `r fmt_num(s_enr$estimate, 1)` pg/mg, 95% CI [`r fmt_num(s_enr$lower.CL, 1)`, `r fmt_num(s_enr$upper.CL, 1)`], `r fmt_p(s_enr$p.value, md = TRUE)`, *d* = `r fmt_num(s_enr$d)`). Welch and Wilcoxon tests of these simple effects gave the same pattern of results.
+:::
+
+## Conclusions and limitations {#sec-conclusions}
+
+**Conclusion.** `r if (a_inter$p.value < alpha) "The data provide evidence that the effect of chronic stress on hippocampal BDNF depends on housing: stress produced a large reduction in BDNF in standard-housed mice but a much smaller change in enriched mice. This pattern is consistent with the idea that environmental enrichment buffers the effects of stress." else "The data do not provide sufficient evidence that the effect of stress depends on housing. This does not show that enrichment has no protective effect; the study may have been too small to detect an interaction."` The interaction was a `r interpret_eta_squared(pe["housing:stress"], rules = "field2013")` effect, but its confidence interval was wide, and the study had limited power to detect interactions of this size.
+
+::: {.callout-warning}
+## Re-read the interpretation if your data change
+The numbers and the significant/not-significant wording above update automatically, but the *scientific interpretation* does not. If you change the data or the analysis, re-read this section and revise it in your own words.
+:::
+
+**Limitations.**
+
+- **Sample size.** With `r n_cell` mice per cell, power for a medium effect was only about `r round(100 * power_medium)`%, and the interaction in particular was estimated imprecisely. A significant result from a study this small may overestimate the true effect.
+- **Simple effects.** A non-significant simple effect (for example, stress in enriched cages) does not show that stress had no effect there.
+- **Independence.** The ANOVA assumes each mouse is an independent observation. Mice housed together share a cage and may be more alike than mice in different cages. In a real study, cage should be considered in the design or analysis, and enriched and standard animals should be housed in separate cages to the same degree.
+- **What "enrichment" means.** Enrichment bundles several features (exercise, novelty, social contact), so we cannot say which one matters.
+- **Simulated data.** These data were generated by a computer to illustrate the methods; they carry no real biological information.
+
+# A Guide to Writing Up Results {#sec-guide}
+
+A good results paragraph lets a reader understand and check what you did without seeing your code.
+
+**Always report**
+
+1. The **sample size in each cell** (and any exclusions or missing data).
+2. **Descriptive statistics for each cell**: the mean and standard deviation (*M*, *SD*), in a table or in the text.
+3. **All three *F* tests**: *F* with both degrees of freedom, the **exact p-value**, and an **effect size with a confidence interval** (partial $\eta^2$ or $\omega^2$). Report the interaction even when it is not significant.
+4. If the interaction is significant, the **simple effects**: the mean difference, its confidence interval, and the adjusted p-value, plus the **name of the adjustment method** (here, Holm).
+5. A reference to your **figure or table**, with the key pattern in words (do not just repeat every number). An **interaction plot** is the best way to show a factorial design.
+
+**Style tips**
+
+- Use past tense for what you did and found.
+- Write statistics in italics: *M*, *SD*, *F*, *p*. Do not put a zero before a p-value or $\eta^2$ (*p* = .002, not 0.002).
+- Report exact p-values rather than "p < .05"; use "*p* < .001" for very small ones.
+- **Describe the interaction in words** ("the effect of stress was larger in standard than in enriched cages"). "There was an interaction" is not enough.
+- Do not interpret main effects as if they were the whole story when the interaction is significant.
+- Never say a non-significant simple effect shows "no effect." The test of the *difference* between simple effects is the interaction.
+
+**A fill-in-the-blank template**
+
+```
+A __ (factor A) × __ (factor B) between-subjects ANOVA showed [a significant /
+no significant] main effect of A, F(1, __) = __, p = __, partial eta-squared = __;
+[a significant / no significant] main effect of B, F(1, __) = __, p = __,
+partial eta-squared = __; and [a significant / no significant] A × B interaction,
+F(1, __) = __, p = __, partial eta-squared = __, 90% CI [__, __].
+[If the interaction is significant:] Within [level 1 of A], B [did / did not]
+change [outcome] (difference = __ [units], 95% CI [__, __], adjusted p = __);
+within [level 2 of A], ...
+```
+
+**If the interaction is not significant**, report it and interpret the main effects directly. Do not run simple-effects tests hoping to find a difference; report the interaction's effect size and confidence interval, and the sensitivity analysis, so readers can judge what the study could and could not detect.
+
+# Your Turn {#sec-your-turn}
+
+Change one thing at a time, re-render, and describe in the notebook log (below) what changed and why.
+
+1. **Spot the interaction.** Draw a quick sketch (or use `ggplot`) of four sets of cell means: (a) no effects, (b) a main effect of housing only, (c) main effects of both factors with no interaction, (d) an interaction. Which have parallel lines?
+2. **Drop the interaction.** Fit `aov(bdnf_pgmg ~ housing + stress, data = bdnf)` and compare it with the full model. How do the main-effect tests change? Why is this model a poor description of these data?
+3. **Swap the factors.** Change the emmeans call to `emmeans(fit, ~ housing | stress)`. Is the effect of enrichment the same in control and stressed mice? Notice that the same interaction can be described from either direction.
+4. **Sample size planning.** Use `power_2x2()` to find how many mice per cell you would need for 80% power if the interaction has $\eta^2_p$ = .06 (f² = .064). What does this say about studying subtle interactions?
+5. **Make an unbalanced design.** Delete two rows for the Standard / Stress cell (do it in code, not in the file), re-fit, and look at the output. Why do we use sum-to-zero contrasts? (Hint: try `car::Anova(fit, type = 3)`.)
+6. **Multiple tests.** In the simulation, change `rep(100, 4)` to the pattern from a world with only a housing effect, such as `c(100, 100, 120, 120)`. What happens to the false-positive rates for stress and for the interaction?
+7. **Add sex.** Fit `aov(bdnf_pgmg ~ housing * stress * sex, data = bdnf)`. How many effects are tested now? What does that do to the chance of at least one false positive?
+8. **Your own data.** Replace the CSV in `Data/` with a file of your own (one row per subject, one column for each of two grouping variables, and one column for the outcome), update the file and variable names, and write your own problem statement, methods, and conclusions.
+
+# Notebook Log {#sec-log}
+
+Keep a running record of decisions so that you (and your instructor) can see how the analysis developed. Add a row whenever you change something.
+
+```{r}
+#| label: tbl-log
+#| tbl-cap: "Analysis decision log (edit the rows below)"
+tribble(
+  ~Date,          ~`Decision or change`,                                              ~Reason,
+  "YYYY-MM-DD",   "Chose 2 x 2 ANOVA; interaction tested first, α = .05",            "Two crossed factors; question is whether enrichment buffers stress",
+  "YYYY-MM-DD",   "Simple effects of stress within housing, Holm adjustment",         "Follow-up for a significant interaction; two comparisons",
+  "",             "",                                                                 ""
+) |>
+  pub_table(align = "lll")
+```
+
+# Reproducibility {#sec-repro}
+
+The R and package versions used to create this notebook are listed below.
+
+```{r}
+#| label: session-info
+sessionInfo()
+```
