@@ -1,25 +1,877 @@
 ---
-title: "Untitled"
-format: html
+title: "Does More Running Mean More New Neurons? Correlation and Regression"
+subtitle: "Lab notebook template: describing and predicting a relationship between two numeric variables"
+author: "Your Name"
+date: today
+date-format: "MMMM D, YYYY"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: true
+    code-fold: show
+    code-tools: true
+    embed-resources: true
+    smooth-scroll: true
+    fig-width: 6.5
+    fig-height: 4.2
+    fig-dpi: 300
+    fig-align: center
+    tbl-cap-location: top
+execute:
+  echo: true
+  warning: false
+  message: false
 ---
 
-## Quarto
+::: {.callout-note icon=false}
+## How to use this notebook
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+This is a **template lab notebook** that walks through a complete analysis: a question, hypotheses, a plan, the data, the code, and a written report of the results. To make it yours:
 
-## Running Code
+1. Open `correlation_regression.Rproj` first (so RStudio uses this folder as the working directory).
+2. Replace `Your Name` in the header above with your name.
+3. Click **Render** to build the notebook. Every number, table, and figure is regenerated from the data and code. (The notebook runs some simulations, so rendering takes a few seconds longer than you might expect.)
+4. Read the text, then change things and re-render to see what happens (see @sec-your-turn).
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+The data are **simulated** for teaching purposes. No animals were tested.
+:::
+
+| Notebook details | |
+|:--|:--|
+| **Project** | Correlation and simple and multiple linear regression |
+| **Data file** | `Data/neurogenesis_running.csv` |
+| **Analysis script** | `R/02_analysis.R` (same analysis, with extra teaching comments) |
+| **Helper code** | `R/00_setup.R` (packages, plot theme, formatting helpers, and `skew()` and `cor_row()`) |
+| **Software** | `r R.version.string`; Quarto |
 
 ```{r}
-1 + 1
+#| label: setup
+# Load packages, the plot theme, and helper functions (see R/00_setup.R)
+source("R/00_setup.R")
 ```
 
-You can add options to executable code like this 
+# Problem Statement and Hypotheses {#sec-problem}
+
+## Background
+
+New neurons are born throughout adulthood in the **dentate gyrus** of the hippocampus, a process called **adult neurogenesis**. Newly born neurons express a protein called **doublecortin (DCX)**, so counting DCX-positive (DCX+) cells in tissue sections is a common way to estimate how much neurogenesis has recently occurred. Neurogenesis is increased by **voluntary wheel running** and declines with **age**.
+
+In this notebook, 60 adult mice lived with a running wheel for two weeks. We recorded how far each mouse ran per night and then counted DCX+ cells in the dentate gyrus. Both measurements are numeric, so the natural questions are: *Are the two variables related? How strongly? And can we use one to predict the other?* **Correlation** answers the first two questions; **regression** answers the third.
+
+## Problem statement
+
+> **Is the distance a mouse runs related to the number of new (DCX+) neurons in its dentate gyrus, and how many additional DCX+ cells are associated with each additional kilometer run per night?**
+
+We have **two numeric variables measured on the same 60 mice**, and we want to describe the *linear* relationship between them. The appropriate tools are a **Pearson correlation** (the strength and direction of the straight-line relationship) and a **simple linear regression** (the equation of the line). Later we add the mouse's **age** as a second predictor (multiple regression).
+
+## Hypotheses
+
+For the correlation, with $\rho$ (rho) the **population** correlation:
+
+$$
+H_0: \rho = 0 \qquad \text{(no linear relationship between running distance and DCX+ cells)}
+$$
+
+$$
+H_1: \rho \neq 0 \qquad \text{(there is a linear relationship)}
+$$
+
+For the regression, with $\beta_1$ the **population** slope (the change in the mean DCX+ count for one extra km):
+
+$$
+H_0: \beta_1 = 0 \qquad \text{versus} \qquad H_1: \beta_1 \neq 0.
+$$
+
+In simple regression these two pairs of hypotheses are **equivalent**: the slope is zero exactly when the correlation is zero, and the two tests give identical *p*-values (@sec-regression). We use **two-tailed** tests, because more running could in principle raise or lower the cell count, and set the **significance level** at $\alpha = .05$.
+
+## Decision errors: Type I and Type II {#sec-errors}
+
+@tbl-errors shows the four possible outcomes of a hypothesis test.
 
 ```{r}
-#| echo: false
-2 * 2
+#| label: tbl-errors
+#| tbl-cap: "Possible outcomes of a hypothesis test"
+tribble(
+  ~Decision,                 ~`H0 is actually true`,                         ~`H0 is actually false`,
+  "Reject H0",               "Type I error (probability = α)",                "Correct decision (probability = power = 1 − β)",
+  "Fail to reject H0",       "Correct decision (probability = 1 − α)",        "Type II error (probability = β)"
+) |>
+  pub_table(align = "lcc")
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+- A **Type I error** (false positive) means concluding that running and cell count are related when, in the population, they are not. We control this rate by choosing $\alpha$.
+- A **Type II error** (false negative) means missing a real relationship. Its probability is $\beta$, and **power** $= 1 - \beta$ is the probability of detecting a real relationship of a given size. Correlations estimated from small samples are very imprecise, so power depends strongly on $n$. We study both errors in @sec-sim.
+
+# Methods {#sec-methods}
+
+## Subjects and procedure
+
+Sixty adult mice (30 female, 30 male; 8 to 20 weeks old) were housed individually with a running wheel for two weeks. A counter recorded the **average distance run per night** (km). At the end of the two weeks, brains were sectioned, and **DCX+ cells in the dentate gyrus** were counted by an observer unaware of each animal's running distance. *(Simulated data for teaching. In a real notebook, give the strain, housing, wheel type, tissue preparation and counting method, and the approval number of your animal-care protocol.)*
+
+::: {.callout-important}
+## Running distance was not assigned
+We did not randomly assign mice to run different distances; each mouse chose how much to run. This is an **observational** (correlational) design with respect to running distance, which limits what we can conclude about cause and effect (@sec-conclusions).
+:::
+
+## Data description {#sec-data}
+
+The raw data are stored in `Data/neurogenesis_running.csv` (one row per mouse). The raw file is **never edited by hand**: all calculations are done in code so they are documented and repeatable.
+
+```{r}
+#| label: tbl-dictionary
+#| tbl-cap: "Variables in the raw data file"
+tribble(
+  ~Variable,     ~Description,                                                   ~Type,                     ~`Role in the analysis`,
+  "mouse_id",    "Unique mouse identifier (M01–M60)",                            "Identifier",              "—",
+  "sex",         "Female (F) or male (M)",                                       "Categorical",             "Descriptive",
+  "age_weeks",   "Age of the mouse (weeks)",                                     "Numeric",                 "Covariate (second predictor)",
+  "wheel_km",    "Average distance run per night (km)",                          "Numeric (continuous)",    "Predictor (X)",
+  "dcx_cells",   "DCX+ cells counted in the dentate gyrus",                      "Numeric (count)",         "Outcome (Y)"
+) |>
+  pub_table(align = "llll")
+```
+
+```{r}
+#| label: import
+neuro <- read_csv(here("Data", "neurogenesis_running.csv"), show_col_types = FALSE) |>
+  mutate(sex = factor(sex, levels = c("F", "M"), labels = c("Female", "Male")))
+
+glimpse(neuro)
+```
+
+```{r}
+#| label: checks
+n_mice <- nrow(neuro)
+
+tibble(
+  `Rows`                    = n_mice,
+  `Missing values`          = sum(is.na(neuro)),
+  `Duplicated mouse IDs`    = sum(duplicated(neuro$mouse_id)),
+  `Impossible values (< 0)` = sum(neuro$wheel_km < 0 | neuro$dcx_cells < 0)
+) |>
+  pub_table(align = "cccc")
+```
+
+The file has `r n_mice` mice, with no missing or impossible values, so all `r n_mice` are analyzed.
+
+# Statistical Analysis {#sec-stats}
+
+## Planned analysis
+
+- **Descriptive statistics and graphs first.** Always plot the two variables against each other *before* computing a correlation. The correlation coefficient describes only straight-line relationships, and it is easy to fool.
+- **Correlation.** The **Pearson correlation coefficient**, with a 95% confidence interval and a two-tailed test of $H_0: \rho = 0$:
+$$r = \frac{\sum (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum (x_i - \bar{x})^2 \, \sum (y_i - \bar{y})^2}}.$$
+It ranges from $-1$ (perfect negative line) through $0$ (no linear relationship) to $+1$ (perfect positive line). Its square, $r^2$, is the proportion of variability in one variable that is shared with the other. By convention, $|r|$ of .10, .30, and .50 are small, medium, and large effects (Cohen, 1988), but these benchmarks should be interpreted in context. The rank-based **Spearman** and **Kendall** correlations serve as checks.
+- **Simple linear regression.** The model
+$$\text{DCX}_i = \beta_0 + \beta_1 \, \text{km}_i + \varepsilon_i, \qquad \varepsilon_i \sim N(0, \sigma^2),$$
+fit by **least squares**. The slope $\beta_1$ is the expected change in DCX+ cells for each additional km per night; the intercept $\beta_0$ is the expected count at 0 km.
+- **Assumptions of the regression.** (1) **Linearity:** the mean of $Y$ changes in a straight line with $X$; (2) **independence:** each mouse is one independent observation; (3) **normal residuals;** (4) **constant variance** of the residuals across all values of $X$; (5) no single point has undue **influence** on the line. All are checked with residual plots (@sec-diagnostics).
+- **Multiple regression.** Age is added as a second predictor to see whether the running effect holds after accounting for age and whether it improves prediction (@sec-multiple).
+- **Effect sizes.** $r$ and $r^2$, the slope with its confidence interval (in the original units), and standardized coefficients.
+- **Robustness check.** A bootstrap confidence interval for the slope and the Spearman correlation.
+- **Software.** Analyses were run in `r R.version.string` using the tidyverse, `broom`, `effectsize`, and `pwr`.
+
+```{r}
+#| label: decisions
+# Decisions made BEFORE looking at the results
+alpha      <- 0.05    # Type I error rate
+conf_level <- 0.95    # confidence level for intervals
+power_goal <- 0.80    # conventional power target
+```
+
+## Power and sample size plan {#sec-power-plan}
+
+**Power** is the probability of rejecting $H_0$ when it is false. For a correlation it depends on the true correlation, $n$, and $\alpha$. Planning sample size *before* collecting data is good practice. (Here, because this is a teaching template, we do the calculation alongside the data.)
+
+```{r}
+#| label: power-plan
+# A priori: how many mice for 80% power if the true correlation is "medium" (rho = .30)?
+plan30 <- pwr.r.test(r = 0.30, sig.level = alpha, power = power_goal)
+n_for_30 <- ceiling(plan30$n)
+
+# Power with our n = 60 mice if the true correlation is .30
+power_30 <- pwr.r.test(n = n_mice, r = 0.30, sig.level = alpha)$power
+
+# Sensitivity: the smallest true correlation detectable with 80% power at n = 60
+r_min <- pwr.r.test(n = n_mice, sig.level = alpha, power = power_goal)$r
+```
+
+```{r}
+#| label: tbl-power-n
+#| tbl-cap: "Mice needed for 80% power (two-tailed α = .05) at different true correlations"
+tibble(rho = c(0.10, 0.30, 0.50, 0.70)) |>
+  mutate(Label = c("Small", "Medium", "Large", "Very large"),
+         n = map_dbl(rho, ~ ceiling(pwr.r.test(r = .x, sig.level = alpha, power = power_goal)$n))) |>
+  transmute(`True correlation (ρ)` = fmt_apa(rho, 2), `Size` = Label, `Mice needed` = n) |>
+  pub_table(align = "lcc")
+```
+
+- To detect a **medium** true correlation ($\rho = .30$) with 80% power, we would need about **`r n_for_30` mice**. With our `r n_mice` mice, power for $\rho = .30$ would be only about **`r fmt_num(100 * power_30, 0)`%**.
+- Put differently, with `r n_mice` mice the smallest true correlation we could detect with 80% power is about **`r fmt_apa(r_min, 2)`**. If the true correlation were smaller than that, we would often miss it (a Type II error).
+- Small correlations need very large samples: detecting $\rho = .10$ takes about `r ceiling(pwr.r.test(r = 0.10, sig.level = alpha, power = power_goal)$n)` mice.
+
+We chose a strong, plausible effect for this teaching example (so the lesson on a clear result is not buried), but the points above are what you would write in a real power plan.
+
+# Results and Conclusions {#sec-results}
+
+## Exploratory data analysis {#sec-eda}
+
+### Summary statistics
+
+```{r}
+#| label: tbl-desc
+#| tbl-cap: "Descriptive statistics for the numeric variables"
+desc <- neuro |>
+  pivot_longer(c(age_weeks, wheel_km, dcx_cells), names_to = "var", values_to = "value") |>
+  group_by(var) |>
+  summarize(Mean = mean(value), SD = sd(value), Median = median(value),
+            Min = min(value), Max = max(value), Skewness = skew(value), .groups = "drop") |>
+  mutate(Variable = recode(var, age_weeks = "Age (weeks)", wheel_km = "Running distance (km/night)",
+                           dcx_cells = "DCX+ cells"),
+         .before = 1) |>
+  select(-var) |>
+  arrange(match(Variable, c("Running distance (km/night)", "DCX+ cells", "Age (weeks)")))
+
+desc |> pub_table(digits = 2, align = "lrrrrrr")
+```
+
+```{r}
+#| label: sex-balance
+n_f <- sum(neuro$sex == "Female")
+n_m <- sum(neuro$sex == "Male")
+```
+
+There were `r n_f` female and `r n_m` male mice. Running distance ranged from `r fmt_num(min(neuro$wheel_km), 1)` to `r fmt_num(max(neuro$wheel_km), 1)` km per night and DCX+ counts from `r min(neuro$dcx_cells)` to `r max(neuro$dcx_cells)`. Both variables are roughly symmetric (skewness near zero), as @fig-dist shows.
+
+### Distributions
+
+```{r}
+#| label: fig-dist
+#| fig-cap: "Distributions of the two main variables. (A) Running distance. (B) DCX+ cell count."
+#| fig-alt: "Two histograms side by side. Panel A shows running distance in km per night for 60 mice, roughly bell-shaped and centered near 4 km. Panel B shows DCX+ cell counts, roughly bell-shaped and centered near 155 cells."
+#| fig-width: 7
+#| fig-height: 3.2
+p_x <- ggplot(neuro, aes(wheel_km)) +
+  geom_histogram(binwidth = 0.75, fill = "gray80", color = "white") +
+  labs(x = "Running distance (km per night)", y = "Number of mice")
+p_y <- ggplot(neuro, aes(dcx_cells)) +
+  geom_histogram(binwidth = 20, fill = "gray80", color = "white") +
+  labs(x = "DCX+ cells in dentate gyrus", y = "Number of mice")
+p_x + p_y + plot_annotation(tag_levels = "A")
+```
+
+### The scatterplot: always look first
+
+```{r}
+#| label: fig-scatter
+#| fig-cap: "DCX+ cell count against running distance for 60 mice. Each point is one mouse. The blue line is the least-squares regression line, and the orange curve is a flexible (loess) smoother that makes no straight-line assumption."
+#| fig-alt: "Scatterplot with running distance in kilometers on the horizontal axis and DCX+ cell count on the vertical axis. Points rise from lower left to upper right with moderate scatter. A straight blue line and an orange curved smoother nearly coincide."
+ggplot(neuro, aes(wheel_km, dcx_cells)) +
+  geom_point(size = 2.2, alpha = 0.8, color = "gray30") +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE, color = pal[["blue"]], linewidth = 1) +
+  geom_smooth(method = "loess", formula = y ~ x, se = FALSE, color = pal[["orange"]],
+              linewidth = 1, linetype = "dashed") +
+  labs(x = "Running distance (km per night)", y = "DCX+ cells in dentate gyrus")
+```
+
+The points rise from lower left to upper right: mice that ran farther tended to have more DCX+ cells. The relationship looks **linear** (the flexible orange smoother follows the straight blue line closely), the **spread** around the line is about the same everywhere, and there are no extreme points. A correlation is therefore a reasonable summary. We check these impressions formally with the residuals in @sec-diagnostics.
+
+## Correlation {#sec-correlation}
+
+```{r}
+#| label: correlation
+pearson  <- cor_row(neuro$wheel_km, neuro$dcx_cells, "pearson")
+spearman <- cor_row(neuro$wheel_km, neuro$dcx_cells, "spearman")
+kendall  <- cor_row(neuro$wheel_km, neuro$dcx_cells, "kendall")
+
+r_obs   <- pearson$r
+r_lo    <- pearson$lower
+r_hi    <- pearson$upper
+p_r     <- pearson$p
+r2_obs  <- r_obs^2
+r_label <- as.character(effectsize::interpret_r(r_obs, rules = "cohen1988"))
+```
+
+```{r}
+#| label: tbl-corr
+#| tbl-cap: "Correlation between running distance and DCX+ cell count"
+bind_rows(pearson, spearman, kendall) |>
+  mutate(Method  = recode(method, pearson = "Pearson r", spearman = "Spearman ρ", kendall = "Kendall τ"),
+         CI      = if_else(is.na(lower), "—", paste0("[", fmt_apa(lower, 2), ", ", fmt_apa(upper, 2), "]")),
+         `p`     = fmt_p_col(p)) |>
+  transmute(Method, n, `Coefficient` = fmt_apa(r, 2), `95% CI` = CI, p) |>
+  pub_table(align = "lcccc")
+```
+
+The Pearson correlation is **$r$ = `r fmt_apa(r_obs, 2)`**, 95% CI [`r fmt_apa(r_lo, 2)`, `r fmt_apa(r_hi, 2)`], `r fmt_p(p_r, md = TRUE)`: a **`r r_label`** positive correlation. We `r if (p_r < alpha) "reject" else "fail to reject"` $H_0: \rho = 0$. The squared correlation is $r^2$ = `r fmt_apa(r2_obs, 2)`, meaning that about **`r fmt_num(100 * r2_obs, 0)`%** of the variability in DCX+ cell counts is shared with (statistically "explained by") running distance, and the remaining `r fmt_num(100 * (1 - r2_obs), 0)`% is due to everything else. The Spearman (rank-based) correlation, `r fmt_apa(spearman$r, 2)`, is `r if (abs(spearman$r - r_obs) < 0.1) "very close to" else "noticeably different from"` the Pearson value, as expected when the relationship is linear and there are no outliers.
+
+::: {.callout-tip}
+## What the confidence interval tells you
+With only 60 mice, $r$ is a rough estimate: the interval runs from `r fmt_apa(r_lo, 2)` to `r fmt_apa(r_hi, 2)`, so the true correlation could plausibly be moderate or very strong. Confidence intervals for $r$ are not symmetric around $r$ (they are computed on the Fisher $z$ scale), and they narrow slowly as $n$ grows (@sec-sim).
+:::
+
+## Simple linear regression {#sec-regression}
+
+Correlation tells us the *strength* of the relationship. **Regression** gives us the *line* so we can describe the change in Y per unit of X and make predictions.
+
+```{r}
+#| label: regression
+fit1 <- lm(dcx_cells ~ wheel_km, data = neuro)
+
+coef1   <- tidy(fit1, conf.int = TRUE, conf.level = conf_level)
+glance1 <- glance(fit1)
+
+b0 <- coef1$estimate[coef1$term == "(Intercept)"]
+b1 <- coef1$estimate[coef1$term == "wheel_km"]
+b1_se <- coef1$std.error[coef1$term == "wheel_km"]
+b1_lo <- coef1$conf.low[coef1$term == "wheel_km"]
+b1_hi <- coef1$conf.high[coef1$term == "wheel_km"]
+t_b1  <- coef1$statistic[coef1$term == "wheel_km"]
+p_b1  <- coef1$p.value[coef1$term == "wheel_km"]
+df_res <- glance1$df.residual
+s_res  <- glance1$sigma
+r2_fit <- glance1$r.squared
+F_fit  <- glance1$statistic
+```
+
+```{r}
+#| label: tbl-coef1
+#| tbl-cap: "Simple linear regression: DCX+ cells predicted from running distance"
+coef1 |>
+  transmute(Term = recode(term, `(Intercept)` = "Intercept (0 km)", wheel_km = "Slope (per km)"),
+            Estimate = estimate, SE = std.error, `95% CI` = paste0("[", fmt_num(conf.low, 1), ", ", fmt_num(conf.high, 1), "]"),
+            t = statistic, df = df_res, p = fmt_p_col(p.value)) |>
+  mutate(across(c(Estimate, SE, t), ~ fmt_num(.x, 2))) |>
+  pub_table(align = "lrrcrrr")
+```
+
+The fitted regression line is
+
+$$\widehat{\text{DCX}} = `r fmt_num(b0, 1)` + `r fmt_num(b1, 1)` \times \text{km}.$$
+
+- **Slope.** Each additional **kilometer** run per night was associated with about **`r fmt_num(b1, 1)` more DCX+ cells** (95% CI [`r fmt_num(b1_lo, 1)`, `r fmt_num(b1_hi, 1)`]), *t*(`r df_res`) = `r fmt_num(t_b1, 2)`, `r fmt_p(p_b1, md = TRUE)`. This is the test of $H_0: \beta_1 = 0$.
+- **Intercept.** The line predicts `r fmt_num(b0, 1)` cells at 0 km. But no mouse ran less than `r fmt_num(min(neuro$wheel_km), 1)` km, so the intercept is an **extrapolation** beyond the data and has no practical meaning here. A common remedy is to **center** the predictor (subtract its mean) so the intercept becomes the predicted count for an *average* runner, `r fmt_num(mean(neuro$dcx_cells), 1)` cells in this case.
+- **Goodness of fit.** $R^2$ = `r fmt_apa(r2_fit, 2)`, which is simply $r^2$ from the previous section. The **residual standard error** is `r fmt_num(s_res, 1)` cells: a typical mouse's count is about this far from the line.
+- **Same test as the correlation.** The slope's *t* (`r fmt_num(t_b1, 2)`) and *p*-value are identical to those of the correlation test, because $t = r\sqrt{(n-2)/(1-r^2)}$. The overall *F* test is the square of the slope's *t*: *F*(1, `r df_res`) = `r fmt_num(F_fit, 2)`.
+
+### Showing the model: the confidence band and the prediction band
+
+```{r}
+#| label: bands
+grid <- tibble(wheel_km = seq(min(neuro$wheel_km), max(neuro$wheel_km), length.out = 100))
+bands <- bind_cols(
+  grid,
+  predict(fit1, grid, interval = "confidence", level = conf_level) |> as_tibble() |>
+    rename(ci_lwr = lwr, ci_upr = upr),
+  predict(fit1, grid, interval = "prediction", level = conf_level) |> as_tibble() |>
+    select(pi_lwr = lwr, pi_upr = upr)
+)
+```
+
+```{r}
+#| label: fig-main
+#| fig-cap: "DCX+ cell count as a function of running distance (n = 60 mice). The line is the least-squares regression line, the dark band is its 95% confidence interval (where the mean count lies), and the light band is the 95% prediction interval (where a new mouse's count is expected to fall)."
+#| fig-alt: "Scatterplot of DCX+ cell count against running distance with an upward-sloping blue regression line. A narrow dark band around the line shows the confidence interval for the mean, and a much wider light band shows the prediction interval, which contains almost all of the points. An annotation gives r, R squared, and the regression equation."
+label_txt <- paste0("r = ", fmt_apa(r_obs, 2), ",  R² = ", fmt_apa(r2_fit, 2), "\nDCX = ", fmt_num(b0, 1), " + ", fmt_num(b1, 1), " × km")
+ggplot(neuro, aes(wheel_km, dcx_cells)) +
+  geom_ribbon(data = bands, aes(y = NULL, ymin = pi_lwr, ymax = pi_upr), fill = pal[["sky"]], alpha = 0.18) +
+  geom_ribbon(data = bands, aes(y = NULL, ymin = ci_lwr, ymax = ci_upr), fill = pal[["blue"]], alpha = 0.35) +
+  geom_line(data = bands, aes(y = ci_lwr + (ci_upr - ci_lwr) / 2), color = pal[["blue"]], linewidth = 1) +
+  geom_point(size = 2.2, color = "gray20", alpha = 0.85) +
+  annotate("text", x = min(neuro$wheel_km), y = max(bands$pi_upr), label = label_txt,
+           hjust = 0, vjust = 1, size = 3.8) +
+  labs(x = "Running distance (km per night)", y = "DCX+ cells in dentate gyrus")
+```
+
+The **confidence band** is narrow because we know the *average* count for a given running distance fairly well. The **prediction band** is much wider because individual mice vary around their average by about `r fmt_num(s_res, 0)` cells. Both bands are narrowest at the mean of $X$ and widen toward the ends.
+
+### Making predictions
+
+```{r}
+#| label: tbl-pred
+#| tbl-cap: "Predicted DCX+ counts at selected running distances, with 95% confidence and prediction intervals"
+new_x <- tibble(wheel_km = c(2, 4, 6))
+preds <- bind_cols(
+  new_x,
+  predict(fit1, new_x, interval = "confidence", level = conf_level) |> as_tibble() |>
+    rename(ci_lwr = lwr, ci_upr = upr),
+  predict(fit1, new_x, interval = "prediction", level = conf_level) |> as_tibble() |>
+    select(pi_lwr = lwr, pi_upr = upr)
+)
+preds |>
+  transmute(`Running distance (km)` = wheel_km,
+            `Predicted DCX+ cells` = fmt_num(fit, 0),
+            `95% CI for the mean` = paste0("[", fmt_num(ci_lwr, 0), ", ", fmt_num(ci_upr, 0), "]"),
+            `95% PI for one mouse` = paste0("[", fmt_num(pi_lwr, 0), ", ", fmt_num(pi_upr, 0), "]")) |>
+  pub_table(align = "cccc")
+```
+
+```{r}
+#| label: extrapolate
+pred_15 <- predict(fit1, tibble(wheel_km = 15))[[1]]
+```
+
+::: {.callout-warning}
+## Do not extrapolate
+Predictions are trustworthy only **within the range of the observed X values** (here `r fmt_num(min(neuro$wheel_km), 1)` to `r fmt_num(max(neuro$wheel_km), 1)` km). The model would predict `r fmt_num(pred_15, 0)` cells for a mouse that ran 15 km per night, but we have no data to show that the relationship stays linear out there (cell counts cannot keep rising forever).
+:::
+
+## Checking the regression assumptions {#sec-diagnostics}
+
+A regression is only as trustworthy as its assumptions. We check them with the **residuals**, the differences between each mouse's actual count and the value on the line.
+
+```{r}
+#| label: diagnostics
+aug <- augment(fit1, data = neuro)
+
+shap <- shapiro.test(aug$.resid)
+cook_cut <- 4 / n_mice
+flagged <- aug |> filter(.cooksd > cook_cut)
+max_cook <- max(aug$.cooksd)
+```
+
+```{r}
+#| label: fig-diag
+#| fig-cap: "Residual diagnostics for the simple regression. (A) Residuals vs. fitted values: a flat, even band means the relationship is linear with constant spread. (B) Normal Q-Q plot of standardized residuals: points near the line mean normal residuals. (C) Spread-location plot: a flat trend means constant variance. (D) Cook's distance for each mouse; the dashed line is 4/n."
+#| fig-alt: "Four diagnostic panels. Panel A: residuals scattered evenly around zero with a smoother that stays close to zero. Panel B: Q-Q plot with points close to the diagonal line. Panel C: square-root of absolute standardized residuals against fitted values with a smoother that stays roughly level. Panel D: bars of Cook's distance for the 60 mice, all small, with a few close to the dashed cutoff line."
+#| fig-width: 7
+#| fig-height: 6.2
+d_a <- ggplot(aug, aes(.fitted, .resid)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
+  geom_point(color = "gray30", alpha = 0.8) +
+  geom_smooth(method = "loess", formula = y ~ x, se = FALSE, color = pal[["vermillion"]], linewidth = 0.8) +
+  labs(x = "Fitted values", y = "Residuals")
+d_b <- ggplot(aug, aes(sample = .std.resid)) +
+  stat_qq(color = "gray30", alpha = 0.8) + stat_qq_line(color = pal[["vermillion"]]) +
+  labs(x = "Theoretical quantiles", y = "Standardized residuals")
+d_c <- ggplot(aug, aes(.fitted, sqrt(abs(.std.resid)))) +
+  geom_point(color = "gray30", alpha = 0.8) +
+  geom_smooth(method = "loess", formula = y ~ x, se = FALSE, color = pal[["vermillion"]], linewidth = 0.8) +
+  labs(x = "Fitted values", y = expression(sqrt("|Standardized residuals|")))
+d_d <- ggplot(aug, aes(seq_along(.cooksd), .cooksd)) +
+  geom_col(fill = "gray60", width = 0.7) +
+  geom_hline(yintercept = cook_cut, linetype = "dashed", color = pal[["vermillion"]]) +
+  labs(x = "Mouse (row number)", y = "Cook's distance")
+(d_a + d_b) / (d_c + d_d) + plot_annotation(tag_levels = "A")
+```
+
+- **Linearity and constant variance (A, C).** The residuals form an even band around zero with no curve and no funnel shape, so a straight line fits and the spread is similar for all fitted values.
+- **Normality (B).** The residuals follow the reference line closely. The Shapiro–Wilk test agrees (*W* = `r fmt_num(shap$statistic, 3)`, `r fmt_p(shap$p.value, md = TRUE)`), but remember that a non-significant test is not proof of normality, and with large samples tiny departures become "significant". Look at the plot first.
+- **Influence (D).** Cook's distance measures how much the fitted line would change if one mouse were removed. A common flag is $4/n$ = `r fmt_num(cook_cut, 3)`. `r nrow(flagged)` mice exceed it (the largest Cook's distance is `r fmt_num(max_cook, 2)`; values near 1 would be a concern), so no single mouse drives the result.
+- **Independence.** This comes from the design, not from a plot: each row is a different mouse, housed individually, and no mouse influences another.
+
+### A non-significant assumption test is not proof
+
+Residual diagnostics are judgments, not pass/fail tests. When the plots look doubtful, report the problem, try a robust alternative (a bootstrap or rank-based method), and show that the conclusion does or does not change.
+
+```{r}
+#| label: bootstrap
+set.seed(2024)
+boot_slopes <- replicate(2000, {
+  b <- neuro[sample(n_mice, replace = TRUE), ]
+  coef(lm(dcx_cells ~ wheel_km, data = b))[["wheel_km"]]
+})
+boot_ci <- quantile(boot_slopes, c(0.025, 0.975))
+```
+
+As a robustness check, we **resampled the mice with replacement** 2,000 times and re-fit the line each time (a case-resampling bootstrap). The middle 95% of those slopes runs from `r fmt_num(boot_ci[1], 1)` to `r fmt_num(boot_ci[2], 1)` cells per km, which is `r if (abs(boot_ci[1] - b1_lo) < 1.5 && abs(boot_ci[2] - b1_hi) < 1.5) "very close to" else "different from"` the t-based interval ([`r fmt_num(b1_lo, 1)`, `r fmt_num(b1_hi, 1)`]).
+
+## Multiple regression: accounting for age {#sec-multiple}
+
+Neurogenesis declines with age. Age might therefore (1) **confound** the running effect (if older mice also ran less, some of the apparent benefit of running would really be a lack of aging), or (2) simply explain additional variability in cell counts. A **multiple regression** includes both predictors:
+
+$$\text{DCX}_i = \beta_0 + \beta_1 \, \text{km}_i + \beta_2 \, \text{age}_i + \varepsilon_i.$$
+
+Each slope is now the change in DCX+ cells per unit of *that* predictor **holding the other predictor constant**.
+
+```{r}
+#| label: multiple
+fit2 <- lm(dcx_cells ~ wheel_km + age_weeks, data = neuro)
+
+coef2   <- tidy(fit2, conf.int = TRUE, conf.level = conf_level)
+glance2 <- glance(fit2)
+cmp     <- anova(fit1, fit2)
+
+r_wheel_age <- cor(neuro$wheel_km, neuro$age_weeks)
+b1_adj   <- coef2$estimate[coef2$term == "wheel_km"]
+b1_adj_se <- coef2$std.error[coef2$term == "wheel_km"]
+b2_age   <- coef2$estimate[coef2$term == "age_weeks"]
+b2_lo    <- coef2$conf.low[coef2$term == "age_weeks"]
+b2_hi    <- coef2$conf.high[coef2$term == "age_weeks"]
+p_age    <- coef2$p.value[coef2$term == "age_weeks"]
+r2_full  <- glance2$r.squared
+r2_adj   <- glance2$adj.r.squared
+F_cmp    <- cmp$F[2]
+p_cmp    <- cmp$`Pr(>F)`[2]
+std2     <- as_tibble(standardize_parameters(fit2))
+beta_wheel <- std2$Std_Coefficient[std2$Parameter == "wheel_km"]
+beta_age   <- std2$Std_Coefficient[std2$Parameter == "age_weeks"]
+# Unique contribution of each predictor = drop in R-squared when it is removed
+uniq_wheel <- r2_full - summary(lm(dcx_cells ~ age_weeks, data = neuro))$r.squared
+uniq_age   <- r2_full - r2_fit
+```
+
+```{r}
+#| label: tbl-coef2
+#| tbl-cap: "Multiple regression: DCX+ cells predicted from running distance and age"
+coef2 |>
+  left_join(std2 |> select(term = Parameter, Beta = Std_Coefficient), by = "term") |>
+  transmute(Term = recode(term, `(Intercept)` = "Intercept", wheel_km = "Running distance (per km)", age_weeks = "Age (per week)"),
+            Estimate = fmt_num(estimate, 2), SE = fmt_num(std.error, 2),
+            `95% CI` = paste0("[", fmt_num(conf.low, 1), ", ", fmt_num(conf.high, 1), "]"),
+            t = fmt_num(statistic, 2), p = fmt_p_col(p.value),
+            `Std. β` = if_else(term == "(Intercept)", "—", fmt_num(Beta, 2))) |>
+  pub_table(align = "lrrcrrr")
+```
+
+```{r}
+#| label: tbl-models
+#| tbl-cap: "Comparison of the simple and the multiple regression"
+tibble(
+  Model = c("1: Running distance only", "2: Running distance + age"),
+  `R²` = c(r2_fit, r2_full),
+  `Adjusted R²` = c(glance1$adj.r.squared, r2_adj),
+  `Residual SE` = c(glance1$sigma, glance2$sigma),
+  `Slope for running (SE)` = c(paste0(fmt_num(b1, 2), " (", fmt_num(b1_se, 2), ")"),
+                              paste0(fmt_num(b1_adj, 2), " (", fmt_num(b1_adj_se, 2), ")")),
+  AIC = c(AIC(fit1), AIC(fit2))
+) |>
+  mutate(across(c(`R²`, `Adjusted R²`), ~ fmt_apa(.x, 2)),
+         across(c(`Residual SE`, AIC), ~ fmt_num(.x, 1))) |>
+  pub_table(align = "lccccc")
+```
+
+- **Age matters.** Holding running distance constant, each additional week of age was associated with `r fmt_num(abs(b2_age), 1)` `r if (b2_age < 0) "fewer" else "more"` DCX+ cells (95% CI [`r fmt_num(b2_lo, 1)`, `r fmt_num(b2_hi, 1)`], `r fmt_p(p_age, md = TRUE)`). Adding age improved the model significantly, *F*(1, `r cmp$Res.Df[2]`) = `r fmt_num(F_cmp, 2)`, `r fmt_p(p_cmp, md = TRUE)`, and $R^2$ rose from `r fmt_apa(r2_fit, 2)` to **`r fmt_apa(r2_full, 2)`** (adjusted $R^2$ = `r fmt_apa(r2_adj, 2)`; the adjusted value penalizes extra predictors).
+- **The running effect did not change much** (slope `r fmt_num(b1, 1)` before, `r fmt_num(b1_adj, 1)` after adjusting). That is because running distance and age were `r if (abs(r_wheel_age) < 0.2) "essentially unrelated" else "related"` in these mice ($r$ = `r fmt_apa(r_wheel_age, 2)`), so age could not be a confounder. It did, however, make the running estimate **more precise** (the slope's standard error fell from `r fmt_num(b1_se, 2)` to `r fmt_num(b1_adj_se, 2)`), because age removed variability that was otherwise unexplained noise. In an *observational* study, whether adjustment changes the slope is exactly how we judge confounding.
+- **Which predictor matters more?** The **standardized coefficients** put the predictors on a common scale (change in DCX+ SDs for a 1-SD change in the predictor): running distance, `r fmt_num(beta_wheel, 2)`; age, `r fmt_num(beta_age, 2)`. Running distance uniquely explains `r fmt_num(100 * uniq_wheel, 0)`% of the variability in counts, and age uniquely explains `r fmt_num(100 * uniq_age, 0)`%.
+
+```{r}
+#| label: fig-multiple
+#| fig-cap: "Running distance and DCX+ cell count, with points shaded by the mouse's age. The three lines are the multiple-regression predictions for a young (10 weeks), middle-aged (14 weeks), and older (18 weeks) mouse; they are parallel because the model has no interaction."
+#| fig-alt: "Scatterplot of DCX+ cell count against running distance with points shaded from light to dark by age. Three parallel upward-sloping lines labeled 10, 14, and 18 weeks are stacked, with the younger-mouse line highest and the older-mouse line lowest."
+lines2 <- expand_grid(wheel_km = range(neuro$wheel_km), age_weeks = c(10, 14, 18)) |>
+  mutate(pred = predict(fit2, pick(everything())),
+         Age = factor(age_weeks))
+ggplot(neuro, aes(wheel_km, dcx_cells)) +
+  geom_point(aes(fill = age_weeks), shape = 21, color = "gray20", size = 2.8, stroke = 0.4) +
+  geom_line(data = lines2, aes(y = pred, linetype = Age, group = Age), linewidth = 0.9, color = "gray10") +
+  scale_fill_viridis_c(option = "cividis", name = "Age (weeks)", breaks = c(10, 14, 18)) +
+  guides(fill = guide_colorbar(order = 1, barwidth = 6, barheight = 0.6),
+         linetype = guide_legend(order = 2, nrow = 1)) +
+  theme(legend.box = "vertical") +
+  scale_linetype_manual(values = c("10" = "solid", "14" = "dashed", "18" = "dotted"), name = "Predicted line, age (weeks)") +
+  labs(x = "Running distance (km per night)", y = "DCX+ cells in dentate gyrus")
+```
+
+::: {.callout-note}
+## Multiple regression needs more mice
+A common rule of thumb is at least 10 to 20 mice per predictor. Also watch for **collinearity** (predictors strongly correlated with each other), which makes the individual slopes unstable. Here the variance inflation factor is `r fmt_num(1 / (1 - r_wheel_age^2), 2)` (values above about 5 are a concern), so collinearity is not a problem.
+:::
+
+## Pitfalls: when a correlation misleads {#sec-pitfalls}
+
+A correlation coefficient is a single number, and a single number can hide a lot. Three classic traps follow.
+
+### The same *r*, very different data (Anscombe's quartet)
+
+```{r}
+#| label: anscombe
+anscombe_long <- anscombe |>
+  pivot_longer(everything(), names_to = c(".value", "set"), names_pattern = "(.)(.)") |>
+  mutate(set = factor(set, labels = c("I: linear", "II: curved", "III: one outlier", "IV: one leverage point")))
+
+anscombe_stats <- anscombe_long |>
+  group_by(set) |>
+  summarize(`Mean of x` = mean(x), `Mean of y` = mean(y), r = cor(x, y),
+            Slope = coef(lm(y ~ x))[[2]], Intercept = coef(lm(y ~ x))[[1]], .groups = "drop")
+```
+
+```{r}
+#| label: tbl-anscombe
+#| tbl-cap: "Summary statistics of Anscombe's four data sets: they are almost identical"
+anscombe_stats |>
+  mutate(across(c(`Mean of x`, `Mean of y`, Slope, Intercept), ~ fmt_num(.x, 2)), r = fmt_apa(r, 3)) |>
+  rename(`Data set` = set) |>
+  pub_table(align = "lccccc")
+```
+
+```{r}
+#| label: fig-anscombe
+#| fig-cap: "Anscombe's quartet. All four data sets have the same means, the same correlation (r = .82), and the same regression line, yet only the first is described well by a line."
+#| fig-alt: "Four scatterplots with the same fitted blue line. Panel I shows a noisy linear cloud. Panel II shows points following a smooth curve. Panel III shows points on a perfect line except for one high outlier. Panel IV shows ten points stacked at one x value and a single far-right point that determines the slope."
+#| fig-width: 7
+#| fig-height: 5.5
+ggplot(anscombe_long, aes(x, y)) +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE, color = pal[["blue"]], linewidth = 0.9) +
+  geom_point(size = 2.3, color = "gray20") +
+  facet_wrap(~ set) +
+  labs(x = "x", y = "y")
+```
+
+The summary statistics are nearly identical, but the graphs are not: a curved relationship (II), an outlier that tilts the line (III), and a single high-leverage point that creates the whole correlation (IV). **Never report a correlation without looking at the scatterplot.**
+
+### Restricted range and outliers in our own data
+
+```{r}
+#| label: pitfalls-ours
+# (a) Restricted range: only mice that ran between 3 and 5 km
+restricted <- neuro |> filter(wheel_km >= 3, wheel_km <= 5)
+restr <- cor_row(restricted$wheel_km, restricted$dcx_cells)
+
+# (b) One extreme mouse added to the data: ran 12 km but has only 60 cells
+with_outlier <- bind_rows(neuro |> mutate(flag = "Original mouse"),
+                          tibble(mouse_id = "M61", sex = factor("Male", levels = levels(neuro$sex)),
+                                 age_weeks = 14, wheel_km = 12, dcx_cells = 60, flag = "Added mouse"))
+outl <- cor_row(with_outlier$wheel_km, with_outlier$dcx_cells)
+```
+
+```{r}
+#| label: fig-pitfalls
+#| fig-cap: "Two ways to distort a correlation using our own data. (A) Restricted range: using only mice that ran 3 to 5 km (dark points) shrinks the correlation. (B) One extreme added mouse (orange) that ran 12 km but has few DCX+ cells pulls the line down and weakens the correlation."
+#| fig-alt: "Two scatterplots. Panel A shows all mice in light gray with the middle range of running distances highlighted in dark gray and a fitted line that is much flatter than the line for all mice. Panel B shows the original mice in gray and one orange point far to the right at a low cell count, with a flatter fitted line."
+#| fig-width: 7
+#| fig-height: 3.4
+pa <- ggplot(neuro, aes(wheel_km, dcx_cells)) +
+  annotate("rect", xmin = 3, xmax = 5, ymin = -Inf, ymax = Inf, fill = pal[["sky"]], alpha = 0.15) +
+  geom_point(color = "gray75", size = 2) +
+  geom_point(data = restricted, color = "gray20", size = 2.2) +
+  geom_smooth(data = restricted, method = "lm", formula = y ~ x, se = FALSE, color = pal[["blue"]]) +
+  annotate("text", x = min(neuro$wheel_km), y = max(neuro$dcx_cells), hjust = 0, vjust = 1, size = 3.6,
+           label = paste0("Restricted: r = ", fmt_apa(restr$r, 2), "\nAll mice: r = ", fmt_apa(r_obs, 2))) +
+  labs(x = "Running distance (km per night)", y = "DCX+ cells")
+pb <- ggplot(with_outlier, aes(wheel_km, dcx_cells)) +
+  geom_point(aes(color = flag, size = flag)) +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE, color = pal[["blue"]]) +
+  scale_color_manual(values = c("Original mouse" = "gray30", "Added mouse" = pal[["vermillion"]]), name = NULL) +
+  scale_size_manual(values = c("Original mouse" = 2, "Added mouse" = 3.8), guide = "none") +
+  annotate("text", x = min(neuro$wheel_km), y = max(neuro$dcx_cells), hjust = 0, vjust = 1, size = 3.6,
+           label = paste0("With the added mouse: r = ", fmt_apa(outl$r, 2))) +
+  labs(x = "Running distance (km per night)", y = "DCX+ cells")
+pa + pb + plot_annotation(tag_levels = "A")
+```
+
+- **Restricted range.** If we had studied only mice that ran 3 to 5 km, the correlation would have been just **`r fmt_apa(restr$r, 2)`** (`r restr$n` mice; `r fmt_p(restr$p, md = TRUE)`), compared with `r fmt_apa(r_obs, 2)` for all mice, even though the biology is identical. Correlations shrink when the range of either variable is narrow (for example, a screening study of only well-performing animals).
+- **One outlier.** A single added mouse (ran 12 km, only 60 cells) lowers the correlation from `r fmt_apa(r_obs, 2)` to **`r fmt_apa(outl$r, 2)`**. A point far from the others on the X axis has high **leverage** and can dominate the line. Examine outliers; do not delete them just to improve the result, but report analyses with and without them when they matter.
+
+### Correlation is not causation
+
+Running and cell counts are strongly correlated here, and it is *plausible* that running increases neurogenesis (this is supported by experiments in which running is assigned). But a correlation alone cannot establish it, for three reasons: (1) **reverse causation** (mice with higher neurogenesis might be more active); (2) a **third variable** that influences both (we adjusted for age, but sex, stress, health, or social experience could also matter); and (3) **chance**, especially in small samples. Only an **experiment** that randomly assigns running (for example, wheel versus no wheel) can separate these explanations.
+
+## Type I and Type II errors in action {#sec-sim}
+
+In real life we get one sample. With a computer, we can generate **thousands of experiments** where we know the truth and see how often the test is right or wrong.
+
+```{r}
+#| label: sim-setup
+set.seed(123)
+n_sims <- 10000
+
+# Draw n pairs (X, Y) with a chosen TRUE correlation rho; return the sample r's
+sim_r <- function(n, rho, n_sims) {
+  replicate(n_sims, {
+    x <- rnorm(n)
+    y <- rho * x + sqrt(1 - rho^2) * rnorm(n)
+    cor(x, y)
+  })
+}
+# Two-sided p-value for a sample correlation r from n pairs
+r_to_p <- function(r, n) 2 * pt(-abs(r * sqrt((n - 2) / (1 - r^2))), n - 2)
+```
+
+### How much does *r* bounce around from sample to sample?
+
+```{r}
+#| label: sim-dist
+sizes <- c(10, 30, 60, 200)
+sim_dist <- map_dfr(sizes, ~ tibble(n = .x, r = sim_r(.x, 0.6, n_sims)))
+sim_dist_tbl <- sim_dist |>
+  group_by(n) |>
+  summarize(mean_r = mean(r), sd_r = sd(r), lo = quantile(r, 0.025), hi = quantile(r, 0.975), .groups = "drop")
+```
+
+```{r}
+#| label: tbl-sim-dist
+#| tbl-cap: "Sample correlations in 10,000 simulated experiments when the TRUE correlation is .60"
+sim_dist_tbl |>
+  transmute(`Sample size (n)` = n, `Mean of r` = fmt_apa(mean_r, 2), `SD of r` = fmt_apa(sd_r, 2),
+            `Middle 95% of r` = paste0(fmt_apa(lo, 2), " to ", fmt_apa(hi, 2))) |>
+  pub_table(align = "cccc")
+```
+
+```{r}
+#| label: fig-sim-dist
+#| fig-cap: "Distribution of the sample correlation in 10,000 simulated experiments when the true correlation is .60 (dashed line). Small samples give widely scattered, left-skewed estimates."
+#| fig-alt: "Four overlapping density curves of sample correlations for n = 10, 30, 60, and 200 mice. The curve for n = 10 is very wide and skewed to the left, extending down toward zero. The curves become progressively narrower and more symmetric around .60 as n increases."
+sim_dist |>
+  mutate(n = factor(n, levels = sizes, labels = paste("n =", sizes))) |>
+  ggplot(aes(r, color = n, linetype = n)) +
+  geom_density(linewidth = 1, adjust = 1.2) +
+  geom_vline(xintercept = 0.6, linetype = "dashed", color = "gray40") +
+  scale_color_manual(values = unname(pal[c("vermillion", "orange", "blue", "green")]), name = NULL) +
+  scale_linetype_manual(values = c("solid", "dashed", "dotdash", "solid"), name = NULL) +
+  labs(x = "Sample correlation (r)", y = "Density")
+```
+
+With only `r sizes[1]` mice, a true correlation of .60 could easily produce a sample correlation anywhere from `r fmt_apa(sim_dist_tbl$lo[1], 2)` to `r fmt_apa(sim_dist_tbl$hi[1], 2)`. With `r sizes[3]` mice (like ours), the middle 95% of sample correlations still ranges from `r fmt_apa(sim_dist_tbl$lo[3], 2)` to `r fmt_apa(sim_dist_tbl$hi[3], 2)`, which is why the confidence interval for our $r$ is as wide as it is. The estimates are slightly pulled toward zero on average (the mean of $r$ is a little below .60) and skewed because $r$ cannot exceed 1.
+
+### Type I error: no relationship
+
+```{r}
+#| label: sim-type1
+r_null <- sim_r(n_mice, 0, n_sims)
+type1 <- mean(r_to_p(r_null, n_mice) < alpha)
+```
+
+When the true correlation is **exactly zero**, `r fmt_num(100 * type1, 1)`% of the `r format(n_sims, big.mark = ",")` simulated experiments with `r n_mice` mice gave $p < .05$. That is close to the nominal 5%: **the false-positive rate is controlled by $\alpha$**. Note that this holds *for a single test*. If you compute correlations among many variables and report only the significant ones, the chance of at least one false positive is much higher (with 10 variables there are 45 pairwise correlations, and about 2 of them will be "significant" by chance alone).
+
+### Type II error and power: a real relationship
+
+```{r}
+#| label: sim-power
+power_grid <- expand_grid(n = c(10, 20, 30, 40, 60, 80, 100), rho = c(0.3, 0.6)) |>
+  mutate(power_sim = map2_dbl(n, rho, ~ mean(r_to_p(sim_r(.x, .y, 4000), .x) < alpha)),
+         power_pwr = map2_dbl(n, rho, ~ pwr.r.test(n = .x, r = .y, sig.level = alpha)$power))
+pw <- function(nn, rr) power_grid$power_sim[power_grid$n == nn & power_grid$rho == rr]
+```
+
+```{r}
+#| label: fig-power
+#| fig-cap: "Power to detect a true correlation as a function of sample size. Points are simulation results; lines are the exact values from pwr.r.test(). The dashed line marks the conventional 80% target."
+#| fig-alt: "Two rising curves of power against sample size from 10 to 100 mice. The curve for a true correlation of .60 rises steeply and reaches 80 percent near 20 mice. The curve for a true correlation of .30 rises slowly, passing 80 percent near 85 mice. Simulation points lie on the lines."
+curve <- expand_grid(n = seq(8, 100, by = 1), rho = c(0.3, 0.6)) |>
+  mutate(power = map2_dbl(n, rho, ~ pwr.r.test(n = .x, r = .y, sig.level = alpha)$power))
+ggplot(curve, aes(n, power, color = factor(rho))) +
+  geom_hline(yintercept = power_goal, linetype = "dashed", color = "gray50") +
+  geom_line(linewidth = 1) +
+  geom_point(data = power_grid, aes(y = power_sim), size = 2.4) +
+  scale_color_manual(values = c("0.3" = pal[["vermillion"]], "0.6" = pal[["blue"]]),
+                     labels = c("0.3" = "ρ = .30 (medium)", "0.6" = "ρ = .60 (large)"), name = "True correlation") +
+  scale_y_continuous(limits = c(0, 1), labels = scales::percent) +
+  labs(x = "Number of mice (n)", y = "Power (probability of p < .05)")
+```
+
+- **For a large true correlation** ($\rho = .60$), power is only about `r fmt_num(100 * pw(10, 0.6), 0)`% with 10 mice but reaches `r fmt_num(100 * pw(20, 0.6), 0)`% with 20 and is essentially certain with `r n_mice`. A Type II error is rare there.
+- **For a medium true correlation** ($\rho = .30$), power with our `r n_mice` mice is only about **`r fmt_num(100 * pw(60, 0.3), 0)`%**, so a **Type II error rate of about `r fmt_num(100 * (1 - pw(60, 0.3)), 0)`%**, and even `r n_mice` mice would miss a real medium correlation about a third of the time. Our strong result does *not* mean such a study could reliably detect smaller effects.
+- The simulations agree with the exact `pwr` values (`r fmt_num(100 * pw(60, 0.3), 0)`% versus `r fmt_num(100 * power_grid$power_pwr[power_grid$n == 60 & power_grid$rho == 0.3], 0)`% at $n$ = `r n_mice`, $\rho = .30$), as they should.
+
+### Significant results from small studies exaggerate effects
+
+```{r}
+#| label: sim-winner
+r_small <- sim_r(20, 0.3, n_sims)
+sig_small <- r_to_p(r_small, 20) < alpha
+winner <- tibble(all = mean(r_small), sig = mean(r_small[sig_small]), power = mean(sig_small))
+```
+
+Suppose the true correlation is .30 and many labs each study 20 mice. Only `r fmt_num(100 * winner$power, 0)`% of them find $p < .05$, and the **average correlation among just the significant studies is `r fmt_apa(winner$sig, 2)`**, nearly double the truth, whereas the average over all studies is `r fmt_apa(winner$all, 2)` (unbiased). Small studies can reach significance only when they *happen* to overestimate the correlation, so published results from small samples tend to be inflated (the "winner's curse"). This is one reason to plan the sample size in advance and to report confidence intervals, not only *p*-values.
+
+::: {.callout-warning}
+## Avoid "observed power"
+Do not compute "power" using the correlation you just observed. It is a mathematical re-expression of the *p*-value and adds no information. Calculate power for the effect size you would consider **meaningful before** the study (as in @sec-power-plan), or report the smallest effect you could have detected (sensitivity).
+:::
+
+## Results write-up {#sec-writeup}
+
+Below is how the results would be written in the Results section of a report. The numbers are inserted directly from the analysis (using inline R code), so they cannot be mistyped and they update automatically if the data change.
+
+::: {.callout-note icon=false appearance="simple"}
+### Results
+
+Data from `r n_mice` mice (`r n_f` female, `r n_m` male) were analyzed; none had missing data. Inspection of the scatterplot and residual plots showed a linear relationship with approximately normal residuals of constant variance and no influential observations (largest Cook's *D* = `r fmt_num(max_cook, 2)`). Running distance (*M* = `r fmt_num(mean(neuro$wheel_km), 1)` km per night, *SD* = `r fmt_num(sd(neuro$wheel_km), 1)`) was `r if (p_r < alpha) "significantly" else "not significantly"` correlated with the number of DCX+ cells in the dentate gyrus (*M* = `r fmt_num(mean(neuro$dcx_cells), 0)`, *SD* = `r fmt_num(sd(neuro$dcx_cells), 0)`), *r*(`r n_mice - 2`) = `r fmt_apa(r_obs, 2)`, 95% CI [`r fmt_apa(r_lo, 2)`, `r fmt_apa(r_hi, 2)`], `r fmt_p(p_r, md = TRUE)`, a `r r_label` effect; running distance accounted for `r fmt_num(100 * r2_fit, 0)`% of the variance in cell counts. In a simple linear regression, each additional kilometer run per night was associated with `r fmt_num(b1, 1)` additional DCX+ cells (*b* = `r fmt_num(b1, 1)`, 95% CI [`r fmt_num(b1_lo, 1)`, `r fmt_num(b1_hi, 1)`], *t*(`r df_res`) = `r fmt_num(t_b1, 2)`, `r fmt_p(p_b1, md = TRUE)`; bootstrap 95% CI [`r fmt_num(boot_ci[1], 1)`, `r fmt_num(boot_ci[2], 1)`]; @fig-main). When age was added to the model, it was a significant negative predictor (*b* = `r fmt_num(b2_age, 1)` cells per week, 95% CI [`r fmt_num(b2_lo, 1)`, `r fmt_num(b2_hi, 1)`], `r fmt_p(p_age, md = TRUE)`) and increased the explained variance from `r fmt_num(100 * r2_fit, 0)`% to `r fmt_num(100 * r2_full, 0)`% (*F*(1, `r cmp$Res.Df[2]`) = `r fmt_num(F_cmp, 2)`, `r fmt_p(p_cmp, md = TRUE)`), whereas the slope for running distance was essentially unchanged (*b* = `r fmt_num(b1_adj, 1)`, @tbl-coef2).
+:::
+
+Notice what the write-up does: it **states the checks of the assumptions**, gives the **sample size**, the **correlation with its degrees of freedom, confidence interval, and *p*-value**, reports the **slope in the original units** (cells per km, which is more informative than the *p*-value alone), reports **$R^2$**, and refers to the figures and tables. It does not say that running *causes* more neurogenesis.
+
+## Conclusions and limitations {#sec-conclusions}
+
+**Conclusion.** `r if (p_r < alpha) "The data provide evidence of a positive linear relationship between running distance and the number of new (DCX+) neurons in the dentate gyrus: mice that ran farther had more DCX+ cells." else "The data do not provide sufficient evidence of a linear relationship between running distance and DCX+ cell count. This does not show that there is none; the sample may have been too small to detect a modest one."` The estimated slope was about `r fmt_num(b1, 0)` additional cells per km per night, and the relationship was `r r_label` ($r$ = `r fmt_apa(r_obs, 2)`). Age independently predicted fewer new neurons, and adjusting for it sharpened, but did not change, the estimate for running.
+
+::: {.callout-warning}
+## Re-read the interpretation if your data change
+The numbers and the reject/fail-to-reject wording above update automatically, but the *scientific interpretation* does not. If you change the data or the analysis, re-read this section and revise it in your own words.
+:::
+
+**Limitations.**
+
+- **Correlation, not causation.** Running distance was not assigned (@sec-pitfalls). A randomized wheel/no-wheel experiment would be needed to claim that running increases neurogenesis.
+- **Sample size and precision.** With `r n_mice` mice, the correlation is estimated imprecisely (95% CI [`r fmt_apa(r_lo, 2)`, `r fmt_apa(r_hi, 2)`]), and a study of this size would often miss a medium correlation (power about `r fmt_num(100 * power_30, 0)`% for $\rho = .30$).
+- **Linear and within range.** The model describes a straight-line trend within the observed running distances (`r fmt_num(min(neuro$wheel_km), 1)` to `r fmt_num(max(neuro$wheel_km), 1)` km). Predictions outside that range are not supported.
+- **Unmeasured variables.** Only age was included. Stress, diet, sex, and social housing also affect neurogenesis and could confound the relationship in a real study.
+- **Count data.** Cell counts are whole numbers that cannot be negative. The linear model works well here because the counts are large and the residuals are well behaved; for small counts (say, 0 to 10), a count model (Poisson regression) would be more appropriate.
+- **Simulated data.** These data were generated by a computer to illustrate the methods; they carry no real biological information.
+
+# A Guide to Writing Up Correlation and Regression {#sec-guide}
+
+**Always report**
+
+1. The **sample size** and how many observations were excluded and why.
+2. That you **looked at the scatterplot** and what the relationship looked like (linear? outliers?). Include the figure.
+3. For a correlation: the **type** (Pearson or Spearman), $r$, the **degrees of freedom** ($n - 2$), the **95% CI**, and the ***p*-value**. Interpret $r$ (and $r^2$) in context.
+4. For a regression: the **slope and intercept with units**, a **confidence interval for the slope**, $R^2$, and the residual standard error. Put the equation in words ("each extra km was associated with about 13 more cells").
+5. The **assumption checks** (residual plots) and any robustness analyses.
+6. Whether the data were **observational or experimental**, and wording that fits the design.
+
+```{r}
+#| label: tbl-choose
+#| tbl-cap: "Which analysis for which question?"
+tribble(
+  ~Question,                                                     ~Data,                                              ~Analysis,
+  "Is there a linear relationship between two numeric variables?", "Two numeric variables, roughly bivariate normal",  "Pearson correlation",
+  "Is there a monotonic (always rising or always falling) relationship?", "Ordinal data, outliers, or a curved but steadily rising pattern", "Spearman or Kendall correlation",
+  "How much does Y change per unit of X; predict Y from X",      "Numeric outcome, one numeric predictor",           "Simple linear regression",
+  "Does X predict Y after accounting for other variables?",     "Numeric outcome, two or more predictors",          "Multiple regression",
+  "Do two group means differ?",                                  "Numeric outcome, categorical predictor",           "t-test or ANOVA (a special case of regression)"
+) |>
+  pub_table(align = "lll")
+```
+
+**Style tips**
+
+- Write statistics in italics: *r*, *b*, *R*², *t*, *F*, *p*, *n*. No leading zero for quantities that cannot exceed 1 ($r$, $R^2$, *p*): write *r* = .63, not 0.63.
+- Report the **direction** of the relationship ("positive") and what the variables are, not just "a significant correlation".
+- Do not interpret $r$ as a percentage of anything: $r^2$ is the proportion of shared variance.
+- Avoid causal language ("running increased", "effect of") when the design is observational; prefer "was associated with", "predicted", "was related to".
+- Do not extrapolate beyond the range of your data.
+
+# Your Turn {#sec-your-turn}
+
+Change one thing at a time, re-render, and describe in the notebook log (below) what changed and why.
+
+1. **Swap the roles.** Fit `lm(wheel_km ~ dcx_cells)`. How do the slope and the intercept change? What stays the same ($r$, the *p*-value)? Why does the choice of which variable is "Y" matter for the *slope* but not for the *correlation*?
+2. **Center the predictor.** Fit the regression with `wheel_km - mean(wheel_km)`. Which numbers change, and which stay the same? How is the intercept now interpreted?
+3. **Change the units.** Convert running distance to meters (`wheel_km * 1000`). What happens to the slope, its SE, and *r*?
+4. **Sex.** Add `sex` to the multiple regression (`dcx_cells ~ wheel_km + age_weeks + sex`). How is the sex coefficient interpreted? Is it significant? Does the running slope change?
+5. **Interaction.** Test whether the running effect depends on age: `dcx_cells ~ wheel_km * age_weeks`. What does a non-zero interaction mean? Does the data support one?
+6. **Create an outlier.** Edit the added mouse in the "pitfalls" code to run 12 km with 250 cells. Does it change the correlation as much? Why does an outlier that falls *along* the trend have less influence than one that falls against it?
+7. **Spearman versus Pearson.** Add a mouse that ran 30 km and had 400 cells, and compare the Pearson and Spearman correlations. Which is more affected?
+8. **Sample size.** Take a random sample of 15 mice (`slice_sample(neuro, n = 15)`) several times and compute *r* each time. How much does it vary? How does this connect to @fig-sim-dist?
+9. **Power.** Use `pwr.r.test()` to find how many mice you would need for 80% power if the true correlation were .40, and then .20.
+10. **Your own data.** Replace the CSV in `Data/` with a file of your own (one row per subject, two numeric variables), update the file and variable names, plot the data first, decide what the right analysis is, and write your own problem statement, hypotheses, methods, and conclusions.
+
+# Notebook Log {#sec-log}
+
+Keep a running record of decisions so that you (and your instructor) can see how the analysis developed. Add a row whenever you change something.
+
+```{r}
+#| label: tbl-log
+#| tbl-cap: "Analysis decision log (edit the rows below)"
+tribble(
+  ~Date,          ~`Decision or change`,                                              ~Reason,
+  "YYYY-MM-DD",   "Used Pearson correlation and linear regression",                   "Scatterplot showed a linear relationship with no outliers",
+  "YYYY-MM-DD",   "Added age as a second predictor",                                  "Neurogenesis declines with age; possible confounder",
+  "",             "",                                                                 ""
+) |>
+  pub_table(align = "lll")
+```
+
+# Reproducibility {#sec-repro}
+
+The R and package versions used to create this notebook are listed below.
+
+```{r}
+#| label: session-info
+sessionInfo()
+```
