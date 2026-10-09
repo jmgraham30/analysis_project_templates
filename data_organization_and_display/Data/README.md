@@ -47,7 +47,7 @@ A real data set seldom arrives clean. These problems were added to the simulated
 
 | Problem | Where | How many |
 |:--|:--|:--:|
-| Treatment spelled several ways (`Vehicle`, `vehicle`, `VEH`, `Vehicle ` with a trailing space, `Drug`, `drug`, `DRUG`, `Drug `) | `Treatment` | 6 distinct spellings of 2 categories |
+| Treatment spelled several ways (`Vehicle`, `vehicle`, `VEH`, `Vehicle ` with a trailing space, `Drug`, `drug`, `DRUG`, `Drug `) | `Treatment` | 8 spellings as typed (6 after `read_csv()` trims spaces) of 2 categories |
 | Sex spelled several ways (`F`, `f`, `Female`, `M`, `m`, `Male`) | `animals.csv`, `sex` | 6 spellings of 2 categories |
 | An animal ID typed in lowercase (`m14`) | `Animal ID` | 1 |
 | A unit typed inside a number cell (`20.7 g`) | `Weight Wk0 (g)` | 1 |

@@ -9,8 +9,7 @@
 #   first create a perfectly clean data set, so we KNOW the right answer, and
 #   then deliberately add the kinds of problems that show up in real lab
 #   spreadsheets (inconsistent labels, missing-value codes, typos, a duplicated
-#   row, and so on). The notebook then shows how to find and fix each one in code,
-#   and we can check that the cleaned data match the original truth.
+#   row, and so on). The notebook then shows how to find and fix each one in code.
 #
 # ABOUT THE RANDOM SEED
 #   The seed (2026) was the first one tried; it was NOT chosen to give any
@@ -125,7 +124,7 @@ raw <- bind_rows(raw, raw[raw$`Animal ID` == "M27", ]) |> arrange(`Animal ID`)
 # ---- 5. Save ------------------------------------------------------------------
 write_csv(animals, here("Data", "animals.csv"))
 write_csv(raw,     here("Data", "open_field_raw.csv"), na = "")
-# (The clean truth is NOT saved in the project: the notebook rebuilds it from the
-#  messy files. It is saved to a scratch file only so we can compare.)
+# (The clean "truth" is not saved separately: the notebook rebuilds the clean
+#  data from the messy files.)
 message("Saved Data/animals.csv (", nrow(animals), " rows) and ",
         "Data/open_field_raw.csv (", nrow(raw), " rows)")

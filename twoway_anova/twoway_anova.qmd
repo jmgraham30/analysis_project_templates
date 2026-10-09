@@ -166,7 +166,7 @@ tibble(
   pub_table(align = "ccc")
 ```
 
-Both grouping variables must be **factors** with their levels in a meaningful order (the first level is the *reference*: Standard housing and Control). We also switch R to **sum-to-zero ("effect") coding**, which makes the ANOVA tests correct even when cells have unequal sizes ("Type III" tests). With equal cell sizes, as here, it does not change the results, but it is a good habit.
+Both grouping variables must be **factors** with their levels in a meaningful order (the first level is the *reference*: Standard housing and Control). We also switch R to **sum-to-zero ("effect") coding**, which is the usual setup for factorial designs. With equal cell sizes, as here, it does not change the results. If cell sizes ever differ, you must *also* request Type III tests (for example, `car::Anova(fit, type = 3)`): `aov()` by itself gives sequential (Type I) tests, whose results then depend on the order of the terms.
 
 ```{r}
 #| label: prepare
@@ -194,7 +194,7 @@ The final data set contains **N = `r N`** mice in four cells of **`r n_cell`**, 
 $$F = \frac{MS_{\text{effect}}}{MS_{\text{error}}} = \frac{\text{variability explained by the effect}}{\text{variability among mice within the same cell}}.$$
 - **Order of interpretation.** We look at the **interaction first**. If the interaction is significant, the main effects describe averages that may not apply to either housing condition, so we follow up with **simple effects** (the effect of stress *within each* housing condition), with the **Holm** method adjusting for the two follow-up tests. If the interaction is not significant, the main effects can be interpreted directly.
 - **Assumptions.** (1) Independence: each mouse is in one cell and measured once; (2) the **residuals** (each mouse's distance from its own cell mean) are approximately normal; (3) the four cells have similar variances; (4) no extreme outliers. We check these with a Q-Q plot, a residuals-versus-fitted plot, the Shapiro–Wilk test, Levene's test, and an outlier screen.
-- **Effect size.** **Partial eta-squared** ($\eta^2_p$), the proportion of variability not explained by the other effects that is explained by this effect, with a 90% confidence interval (the convention for *F* tests); and **partial omega-squared** ($\omega^2_p$), a less biased version. By convention, .01, .06, and .14 are small, medium, and large. For follow-up comparisons we report mean differences with confidence intervals and Cohen's *d*.
+- **Effect size.** **Partial eta-squared** ($\eta^2_p$), the share of the variability left after setting aside the other effects that is explained by this effect, $SS_{\text{effect}} / (SS_{\text{effect}} + SS_{\text{error}})$, with a 90% confidence interval (the convention for *F* tests: because $\eta^2$ cannot be negative and the *F* test is one-sided, a 90% interval matches a two-sided test at $\alpha = .05$); and **partial omega-squared** ($\omega^2_p$), a less biased version. By convention, .01, .06, and .14 are small, medium, and large. For follow-up comparisons we report mean differences with confidence intervals and Cohen's *d*.
 - **Robustness checks.** Welch *t*-tests and Wilcoxon rank-sum tests for the simple effects, and an ANOVA on the ranks of the data.
 - **Software.** Analyses were run in `r R.version.string` using the tidyverse, `broom`, `rstatix`, `emmeans`, `effectsize`, and `pwr`.
 
@@ -377,7 +377,7 @@ Each effect is tested against the same error term (mean square = `r fmt_num(anov
 - **Stress:** *F*(`r a_stress$df`, `r df_error`) = `r fmt_num(a_stress$statistic)`, `r fmt_p(a_stress$p.value, md = TRUE)`.
 - **Housing × Stress interaction:** *F*(`r a_inter$df`, `r df_error`) = `r fmt_num(a_inter$statistic)`, `r fmt_p(a_inter$p.value, md = TRUE)`.
 
-**Decision rule.** For each test, if $p < \alpha$ we reject that $H_0$. The interaction is the key test here: its $p$ is `r if (a_inter$p.value < alpha) "less" else "not less"` than $\alpha$ = `r alpha`, so we **`r if (a_inter$p.value < alpha) "reject" else "fail to reject"`** the null hypothesis of no interaction: `r if (a_inter$p.value < alpha) "the data are not consistent with the effect of stress being the same in both housing conditions. Because of this, the main effects must be interpreted with care: they are averages over two conditions in which the effect of stress is different." else "we do not have evidence that the effect of stress depends on housing, and we can interpret the main effects directly."`
+**Decision rule.** For each test, if $p < \alpha$ we reject that $H_0$. The interaction is the key test here: its $p$ is `r if (a_inter$p.value < alpha) "less" else "not less"` than $\alpha$ = `r fmt_apa(alpha)`, so we **`r if (a_inter$p.value < alpha) "reject" else "fail to reject"`** the null hypothesis of no interaction: `r if (a_inter$p.value < alpha) "the data are not consistent with the effect of stress being the same in both housing conditions. Because of this, the main effects must be interpreted with care: they are averages over two conditions in which the effect of stress is different." else "we do not have evidence that the effect of stress depends on housing, and we can interpret the main effects directly."`
 
 ::: {.callout-important}
 ## What a p-value is (and is not)
@@ -413,11 +413,11 @@ tibble(
   pub_table(align = "lcccc")
 ```
 
-Housing explained about **`r round(100 * pe["housing"])`%** of the variability not accounted for by the other effects (partial $\eta^2$ = `r fmt_apa(pe["housing"])`), stress about **`r round(100 * pe["stress"])`%** (`r fmt_apa(pe["stress"])`), and the interaction about **`r round(100 * pe["housing:stress"])`%** (`r fmt_apa(pe["housing:stress"])`, 90% CI [`r fmt_apa(eta2$CI_low[3])`, `r fmt_apa(eta2$CI_high[3])`]). By the usual benchmarks, these are `r interpret_eta_squared(pe["housing"], rules = "field2013")` (housing), `r interpret_eta_squared(pe["stress"], rules = "field2013")` (stress), and `r interpret_eta_squared(pe["housing:stress"], rules = "field2013")` (interaction) effects. The interaction's confidence interval is wide, so its size is estimated imprecisely.
+Housing explained about **`r round(100 * pe["housing"])`%** of the variability left after setting aside the other effects (partial $\eta^2$ = `r fmt_apa(pe["housing"])`), stress about **`r round(100 * pe["stress"])`%** (`r fmt_apa(pe["stress"])`), and the interaction about **`r round(100 * pe["housing:stress"])`%** (`r fmt_apa(pe["housing:stress"])`, 90% CI [`r fmt_apa(eta2$CI_low[3])`, `r fmt_apa(eta2$CI_high[3])`]). By the usual benchmarks, these are `r interpret_eta_squared(pe["housing"], rules = "field2013")` (housing), `r interpret_eta_squared(pe["stress"], rules = "field2013")` (stress), and `r interpret_eta_squared(pe["housing:stress"], rules = "field2013")` (interaction) effects. The interaction's confidence interval is wide, so its size is estimated imprecisely.
 
 ## Interaction and simple effects {#sec-simple}
 
-To understand the interaction we compare stress with control **separately within each housing condition** (the "simple effects" of stress). With two follow-up tests we adjust the *p*-values with the **Holm** method. Each difference is (Stress) minus (Control), so a **negative** difference means stress lowered BDNF.
+To understand the interaction we compare stress with control **separately within each housing condition** (the "simple effects" of stress). With two follow-up tests we adjust the *p*-values with the **Holm** method (emmeans then reports Bonferroni-adjusted confidence intervals, because Holm's procedure adjusts *p*-values only). Each difference is (Stress) minus (Control), so a **negative** difference means stress lowered BDNF.
 
 ```{r}
 #| label: simple
@@ -453,7 +453,7 @@ simple |>
   transmute(
     Housing = housing,
     `Stress minus Control` = estimate,
-    `95% CI (Holm-adjusted)` = paste0("[", fmt_num(lower.CL, 1), ", ", fmt_num(upper.CL, 1), "]"),
+    `95% CI (Bonferroni-adjusted)` = paste0("[", fmt_num(lower.CL, 1), ", ", fmt_num(upper.CL, 1), "]"),
     `Adjusted p` = fmt_p_col(p.value),
     `Cohen's d` = fmt_num(d),
     `95% CI of d` = paste0("[", fmt_num(d_low), ", ", fmt_num(d_high), "]")
@@ -461,7 +461,7 @@ simple |>
   pub_table(digits = 1, align = "lccccc")
 ```
 
-In **standard cages**, stress lowered BDNF by **`r fmt_num(abs(s_std$estimate), 1)` pg/mg** (Holm-adjusted 95% CI [`r fmt_num(s_std$lower.CL, 1)`, `r fmt_num(s_std$upper.CL, 1)`], `r fmt_p(s_std$p.value, md = TRUE)`, Cohen's *d* = `r fmt_num(s_std$d)`). In **enriched cages**, the change was **`r fmt_num(s_enr$estimate, 1)` pg/mg** (95% CI [`r fmt_num(s_enr$lower.CL, 1)`, `r fmt_num(s_enr$upper.CL, 1)`], `r fmt_p(s_enr$p.value, md = TRUE)`, *d* = `r fmt_num(s_enr$d)`). The **difference between these two stress effects** (the interaction contrast) was `r fmt_num(int_contrast$estimate, 1)` pg/mg, 95% CI [`r fmt_num(int_contrast$lower.CL, 1)`, `r fmt_num(int_contrast$upper.CL, 1)`].
+In **standard cages**, stress lowered BDNF by **`r fmt_num(abs(s_std$estimate), 1)` pg/mg** (Bonferroni-adjusted 95% CI [`r fmt_num(s_std$lower.CL, 1)`, `r fmt_num(s_std$upper.CL, 1)`], `r fmt_p(s_std$p.value, md = TRUE)`, Cohen's *d* = `r fmt_num(s_std$d)`). In **enriched cages**, the change was **`r fmt_num(s_enr$estimate, 1)` pg/mg** (Bonferroni-adjusted 95% CI [`r fmt_num(s_enr$lower.CL, 1)`, `r fmt_num(s_enr$upper.CL, 1)`], `r fmt_p(s_enr$p.value, md = TRUE)`, *d* = `r fmt_num(s_enr$d)`). The **difference between these two stress effects** (the interaction contrast) was `r fmt_num(int_contrast$estimate, 1)` pg/mg, 95% CI [`r fmt_num(int_contrast$lower.CL, 1)`, `r fmt_num(int_contrast$upper.CL, 1)`]`r if (int_contrast$estimate > 0) " (positive: the effect of stress was less negative in enriched cages than in standard cages)" else " (negative: the effect of stress was more negative in enriched cages than in standard cages)"`.
 
 ::: {.callout-caution}
 ## "Not significant" does not mean "no effect"
@@ -470,7 +470,7 @@ The stress effect in enriched cages was not significant, but its confidence inte
 
 ```{r}
 #| label: fig-main
-#| fig-cap: "Effect of housing and stress on hippocampal BDNF. (A) Interaction plot: small symbols are individual mice; large symbols with lines show each cell's mean and 95% confidence interval. Non-parallel lines indicate an interaction. (B) The effect of stress (Stress minus Control) within each housing condition, with Holm-adjusted 95% confidence intervals; an interval that excludes the dashed zero line indicates a significant effect."
+#| fig-cap: "Effect of housing and stress on hippocampal BDNF. (A) Interaction plot: small symbols are individual mice; large symbols with lines show each cell's mean and 95% confidence interval. Non-parallel lines indicate an interaction. (B) The effect of stress (Stress minus Control) within each housing condition, with Bonferroni-adjusted 95% confidence intervals; an interval that excludes the dashed zero line indicates a significant effect."
 #| fig-alt: "Panel A: lines joining the control and stress means for standard housing (blue, solid, circles) and enriched housing (orange, dashed, triangles). The standard line falls steeply from control to stress; the enriched line is nearly flat, so the lines are not parallel. Panel B: the stress effect in standard housing is a large negative value whose interval excludes zero; in enriched housing it is a small negative value whose interval includes zero."
 #| fig-width: 9
 #| fig-height: 4.5
@@ -495,7 +495,7 @@ fig_b <- simple_tbl |>
   geom_pointrange(aes(xmin = lower.CL, xmax = upper.CL), size = 0.6, linewidth = 0.9) +
   scale_color_manual(values = unname(pal[c("blue", "vermillion")])) +
   scale_y_discrete(limits = rev) +
-  labs(x = "Effect of stress on BDNF (pg/mg)\nwith Holm-adjusted 95% CI", y = "Housing") +
+  labs(x = "Effect of stress on BDNF (pg/mg)\nwith Bonferroni-adjusted 95% CI", y = "Housing") +
   theme(legend.position = "none")
 
 fig_a + fig_b + plot_layout(widths = c(1.2, 1)) + plot_annotation(tag_levels = "A")
@@ -678,7 +678,7 @@ Forty mice (10 per cell) were included in the analysis. A 2 (housing: standard, 
 
 ::: {.callout-warning}
 ## Re-read the interpretation if your data change
-The numbers and the significant/not-significant wording above update automatically, but the *scientific interpretation* does not. If you change the data or the analysis, re-read this section and revise it in your own words.
+The numbers (and any wording tied to them with inline R code) update automatically, but the *scientific interpretation* does not. Neither do hand-written sentences elsewhere in this notebook that describe a particular figure or table, or the figure descriptions (alt text). If you change the data or the analysis, re-read the conclusions, the limitations, and those descriptions, and revise them in your own words.
 :::
 
 **Limitations.**

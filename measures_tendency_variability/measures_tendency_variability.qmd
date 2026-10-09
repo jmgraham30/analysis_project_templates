@@ -243,6 +243,8 @@ bind_rows(`Firing rate (spikes/s)` = center_rate, `Spike width (ms)` = center_wi
 - **Firing rate.** The mean (`r fmt_num(center_rate$Mean, 1)` spikes/s) is **much larger** than the median (`r fmt_num(center_rate$Median, 1)`). Half of all neurons fire slower than `r fmt_num(center_rate$Median, 1)` spikes/s, but the few very fast neurons pull the mean up to `r fmt_num(center_rate$Mean, 1)`. The 10% trimmed mean (`r fmt_num(center_rate[["Trimmed mean"]], 1)`) and the geometric mean (`r fmt_num(center_rate[["Geometric mean"]], 1)`) lie in between. Which is "typical"? For skewed data, the **median** (or geometric mean) is closer to what most neurons do.
 - **Spike width.** The mean (`r fmt_num(center_width$Mean, 3)` ms) and median (`r fmt_num(center_width$Median, 3)` ms) are close, as expected for a nearly symmetric distribution. Either describes a typical neuron.
 
+The "Mode (density peak)" column is the highest point of a smoothed histogram. It depends on how much smoothing is used, so treat it as approximate.
+
 ```{r}
 #| label: fig-center
 #| fig-cap: "Firing rates with the mean, median, and geometric mean marked. In skewed data the mean is pulled to the right of the median."
@@ -313,7 +315,7 @@ How to read these:
 #| label: sd-by-hand
 dev         <- rate - mean(rate)                 # each neuron's deviation from the mean
 ss          <- sum(dev^2)                        # sum of squared deviations
-var_by_hand <- ss / (length(rate) - 1)           # divide by n - 1 (see @sec-sim)
+var_by_hand <- ss / (length(rate) - 1)           # divide by n - 1 (see the Simulations section)
 c(`SD by hand` = sqrt(var_by_hand), `sd() function` = sd(rate))
 ```
 
@@ -353,7 +355,7 @@ p_qq2 <- ggplot(neurons, aes(sample = log(firing_rate_hz))) +
 p_qq1 + p_qq2 + plot_annotation(tag_levels = "A")
 ```
 
-For log-normal data, the **geometric mean** (`r fmt_num(exp(mean(log(rate))), 1)` spikes/s) is the natural "typical" value, and the **geometric SD** (`r fmt_num(exp(sd(log(rate))), 1)`) describes the spread *multiplicatively*: a typical neuron fires within a factor of about `r fmt_num(exp(sd(log(rate))), 1)` of the geometric mean.
+For log-normal data, the **geometric mean** (`r fmt_num(exp(mean(log(rate))), 1)` spikes/s) is the natural "typical" value, and the **geometric SD** (`r fmt_num(exp(sd(log(rate))), 1)`) describes the spread *multiplicatively*: if the logs are roughly normal, about two-thirds of neurons fall between the geometric mean divided by this factor and the geometric mean multiplied by it (a factor of about `r fmt_num(exp(sd(log(rate))), 1)`). Pooling regular-spiking and fast-spiking cells makes the logs only roughly normal.
 
 ## Outliers and robustness {#sec-outliers}
 
@@ -445,14 +447,14 @@ group_tbl |>
 
 ```{r}
 #| label: fig-groups
-#| fig-cap: "Firing rate by brain region on (A) a linear scale and (B) a logarithmic scale. Each point is one neuron; boxes show the median and interquartile range; white diamonds mark the mean."
+#| fig-cap: "Firing rate by brain region on (A) a linear scale and (B) a logarithmic scale. Each point is one neuron; boxes show the median and interquartile range; white diamonds mark the arithmetic mean (computed from the raw values and plotted on the log axis in B)."
 #| fig-alt: "Two panels showing firing rate by region (cortex, hippocampus, striatum). Panel A, linear scale, shows the striatum with the highest and most spread-out firing rates, the hippocampus the lowest and tightest, with white diamonds for the means above the medians. Panel B, log scale, shows the three regions with similar spread."
 #| fig-width: 8
 #| fig-height: 4
 fig_groups <- ggplot(neurons, aes(region, firing_rate_hz, color = region, shape = region)) +
   geom_jitter(width = 0.12, height = 0, size = 2, alpha = 0.7) +
   geom_boxplot(width = 0.35, outlier.shape = NA, color = "gray30", fill = NA) +
-  stat_summary(fun = mean, geom = "point", shape = 23, size = 3.5, fill = "white", color = "black") +
+  geom_point(data = group_tbl, aes(y = mean), shape = 23, size = 3.5, fill = "white", color = "black") +
   scale_color_manual(values = unname(pal[c("blue", "orange", "green")])) +
   labs(x = "Brain region", y = "Firing rate (spikes/s)") +
   theme(legend.position = "none")
@@ -464,7 +466,7 @@ fig_groups_log <- fig_groups +
 fig_groups + fig_groups_log + plot_annotation(tag_levels = "A")
 ```
 
-Two features of @tbl-groups are typical of skewed, ratio-scale data. First, in every region the **mean is larger than the median**. Second, the **SD is larger where the mean is larger** (striatum: SD `r fmt_num(group_tbl$sd[group_tbl$region == "Striatum"], 1)`; hippocampus: SD `r fmt_num(group_tbl$sd[group_tbl$region == "Hippocampus"], 1)`), so the groups differ in spread as well as in center. But the **CV** is almost the same in every region (`r fmt_num(min(group_tbl$cv), 2)` to `r fmt_num(max(group_tbl$cv), 2)`), and on the **log scale** (@fig-groups B) the spreads look similar (SD of log rate: `r fmt_num(min(group_tbl$sd_log), 2)` to `r fmt_num(max(group_tbl$sd_log), 2)`). That is the signature of a *multiplicative* process: regions differ by a constant **factor** rather than by a constant amount. Equal spread across groups is an assumption of many tests (t-tests and ANOVA, later in the course), and a log transformation is a common way to meet it.
+Two features of @tbl-groups are typical of skewed, ratio-scale data. First, in every region the **mean is larger than the median**. Second, the **SD is larger where the mean is larger** (striatum: SD `r fmt_num(group_tbl$sd[group_tbl$region == "Striatum"], 1)`; hippocampus: SD `r fmt_num(group_tbl$sd[group_tbl$region == "Hippocampus"], 1)`), so the groups differ in spread as well as in center. But the **CV** is almost the same in every region (`r fmt_num(min(group_tbl$cv), 2)` to `r fmt_num(max(group_tbl$cv), 2)`), and on the **log scale** (@fig-groups B) the spreads look similar (SD of log rate: `r fmt_num(min(group_tbl$sd_log), 2)` to `r fmt_num(max(group_tbl$sd_log), 2)`). That is the signature of a *multiplicative* process: regions differ by a constant **factor** rather than by a constant amount. (The spreads on the log scale are not identical, partly because the share of fast-spiking cells differs by region.) Equal spread across groups is an assumption of many tests (t-tests and ANOVA, later in the course), and a log transformation is a common way to meet it.
 
 ## Precision of the mean: SD versus SE, and confidence intervals {#sec-se}
 
@@ -546,7 +548,7 @@ sim_var <- replicate(10000, {
 sim_var_mean <- summarize(sim_var, across(everything(), mean))
 ```
 
-On average, dividing by $n$ gives **`r fmt_num(sim_var_mean[["Divide by n"]], 2)`**, which is too small (the true value is 1), while dividing by $n - 1$ gives **`r fmt_num(sim_var_mean[["Divide by n - 1"]], 2)`**. A sample's values are always closer to *their own* mean than to the true population mean, so the sum of squares is too small, and dividing by $n - 1$ corrects for it exactly.
+On average, dividing by $n$ gives **`r fmt_num(sim_var_mean[["Divide by n"]], 2)`**, which is too small (the true value is 1), while dividing by $n - 1$ gives **`r fmt_num(sim_var_mean[["Divide by n - 1"]], 2)`**. A sample's values are always closer to *their own* mean than to the true population mean, so the sum of squares is too small, and dividing by $n - 1$ makes the *variance* estimate unbiased on average. (The SD, the square root of the variance, is still very slightly too small on average.)
 
 ### The sampling distribution of the mean and the Central Limit Theorem
 
@@ -657,18 +659,18 @@ Below is how the results would be written in the Results section of a report. Th
 ::: {.callout-note icon=false appearance="simple"}
 ### Results
 
-We recorded `r N` neurons (40 in each of cortex, hippocampus, and striatum) from 12 mice. `r sum(neurons$cell_type == "Regular spiking")` neurons (`r fmt_num(100 * mean(neurons$cell_type == "Regular spiking"), 0)`%) were regular spiking and `r sum(neurons$cell_type == "Fast spiking")` (`r fmt_num(100 * mean(neurons$cell_type == "Fast spiking"), 0)`%) were fast spiking. Firing rates were strongly right-skewed (skewness = `r fmt_num(skew(rate), 2)`; @fig-dist A), so we report medians and interquartile ranges. The median firing rate was `r fmt_num(median(rate), 1)` spikes/s (IQR `r fmt_num(quantile(rate, .25), 1)` to `r fmt_num(quantile(rate, .75), 1)`; bootstrap 95% CI for the median [`r fmt_num(boot_ci[1], 1)`, `r fmt_num(boot_ci[2], 1)`]), well below the mean (*M* = `r fmt_num(mean(rate), 1)`, *SD* = `r fmt_num(sd(rate), 1)`; 95% CI [`r fmt_num(mean_overall$lower, 1)`, `r fmt_num(mean_overall$upper, 1)`]). Medians were `r fmt_num(group_tbl$median[group_tbl$region == "Cortex"], 1)` spikes/s in cortex, `r fmt_num(group_tbl$median[group_tbl$region == "Hippocampus"], 1)` in hippocampus, and `r fmt_num(group_tbl$median[group_tbl$region == "Striatum"], 1)` in striatum (@tbl-groups, @fig-groups). Variability was greater where firing rates were higher (SD of `r fmt_num(group_tbl$sd[group_tbl$region == "Hippocampus"], 1)` in hippocampus versus `r fmt_num(group_tbl$sd[group_tbl$region == "Striatum"], 1)` in striatum), but the coefficient of variation was similar across regions (`r fmt_num(min(group_tbl$cv), 2)` to `r fmt_num(max(group_tbl$cv), 2)`). Spike widths were more symmetric (*M* = `r fmt_num(mean(width), 2)` ms, *SD* = `r fmt_num(sd(width), 2)` ms; @fig-dist B). `r nrow(flagged)` neurons had firing rates above 1.5 × IQR from the upper quartile; all were retained, because they are plausible values (`r sum(flagged$cell_type == "Fast spiking")` were fast-spiking cells).
+We recorded `r N` neurons (40 in each of cortex, hippocampus, and striatum) from 12 mice. `r sum(neurons$cell_type == "Regular spiking")` neurons (`r fmt_num(100 * mean(neurons$cell_type == "Regular spiking"), 0)`%) were regular spiking and `r sum(neurons$cell_type == "Fast spiking")` (`r fmt_num(100 * mean(neurons$cell_type == "Fast spiking"), 0)`%) were fast spiking. Firing rates were strongly right-skewed (skewness = `r fmt_num(skew(rate), 2)`; @fig-dist A), so we report medians and interquartile ranges. The median firing rate was `r fmt_num(median(rate), 1)` spikes/s (IQR `r fmt_num(quantile(rate, .25), 1)` to `r fmt_num(quantile(rate, .75), 1)`; bootstrap 95% CI for the median [`r fmt_num(boot_ci[1], 1)`, `r fmt_num(boot_ci[2], 1)`]), well below the mean (*M* = `r fmt_num(mean(rate), 1)`, *SD* = `r fmt_num(sd(rate), 1)`; 95% CI [`r fmt_num(mean_overall$lower, 1)`, `r fmt_num(mean_overall$upper, 1)`]). These intervals treat the neurons as independent observations, which overstates their precision because neurons from the same mouse are correlated (@sec-se). Medians were `r fmt_num(group_tbl$median[group_tbl$region == "Cortex"], 1)` spikes/s in cortex, `r fmt_num(group_tbl$median[group_tbl$region == "Hippocampus"], 1)` in hippocampus, and `r fmt_num(group_tbl$median[group_tbl$region == "Striatum"], 1)` in striatum (@tbl-groups, @fig-groups). Variability was greater where firing rates were higher (SD of `r fmt_num(group_tbl$sd[group_tbl$region == "Hippocampus"], 1)` in hippocampus versus `r fmt_num(group_tbl$sd[group_tbl$region == "Striatum"], 1)` in striatum), but the coefficient of variation was similar across regions (`r fmt_num(min(group_tbl$cv), 2)` to `r fmt_num(max(group_tbl$cv), 2)`). Spike widths were more symmetric (*M* = `r fmt_num(mean(width), 2)` ms, *SD* = `r fmt_num(sd(width), 2)` ms; @fig-dist B). `r nrow(flagged)` neurons had firing rates above 1.5 × IQR from the upper quartile; all were retained, because they are plausible values (`r sum(flagged$cell_type == "Fast spiking")` were fast-spiking cells).
 :::
 
 Notice what the write-up does: it **names the statistic** for each number (*M*, *SD*, median, IQR, CI), **explains the choice** (median because of skew), reports **n**, and refers to the figures and tables. It does not claim that the regions *differ*: that is a question for a hypothesis test, with the caution that neurons from the same mouse are not independent.
 
 ## Conclusions and limitations {#sec-conclusions}
 
-**Conclusion.** Firing rates in these neurons are strongly skewed, so the **median** (`r fmt_num(median(rate), 1)` spikes/s) and **IQR** describe a typical neuron better than the mean and SD (`r fmt_num(mean(rate), 1)` and `r fmt_num(sd(rate), 1)`). Spike widths are more symmetric, and the mean and SD describe them well. The regions differ in both the center and the spread of firing rates, with spread rising with the mean, a pattern that a log transformation largely removes. Robust statistics (median, IQR) are barely affected by extreme values, whereas the mean and SD are strongly affected. The standard error, not the SD, tells us how precisely the mean is known, and for skewed data with small samples, the usual 95% t interval can be too optimistic.
+**Conclusion.** Firing rates in these neurons are strongly skewed, so the **median** (`r fmt_num(median(rate), 1)` spikes/s) and **IQR** describe a typical neuron better than the mean and SD (`r fmt_num(mean(rate), 1)` and `r fmt_num(sd(rate), 1)`). Spike widths are more symmetric, and the mean and SD describe them well. In this sample, the regions differ in both the center and the spread of firing rates, with spread rising with the mean, a pattern that a log transformation largely removes. Whether those differences generalize beyond these mice needs a hypothesis test that accounts for the fact that neurons come from only a few mice per region. Robust statistics (median, IQR) are barely affected by extreme values, whereas the mean and SD are strongly affected. The standard error, not the SD, tells us how precisely the mean is known, and for skewed data with small samples, the usual 95% t interval can be too optimistic.
 
 ::: {.callout-warning}
 ## Re-read the interpretation if your data change
-The numbers and the wording that depends on them update automatically, but the *scientific interpretation* does not. If you change the data or the analysis, re-read this section and revise it in your own words.
+The numbers (and any wording tied to them with inline R code) update automatically, but the *scientific interpretation* does not. Neither do hand-written sentences elsewhere in this notebook that describe a particular figure or table, or the figure descriptions (alt text). If you change the data or the analysis, re-read the conclusions, the limitations, and those descriptions, and revise them in your own words.
 :::
 
 **Limitations.**

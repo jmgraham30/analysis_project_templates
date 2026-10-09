@@ -234,7 +234,10 @@ group_tbl
 fig_groups <- ggplot(neurons, aes(region, firing_rate_hz, color = region, shape = region)) +
   geom_jitter(width = 0.12, height = 0, size = 2, alpha = 0.7) +
   geom_boxplot(width = 0.35, outlier.shape = NA, color = "gray30", fill = NA) +
-  stat_summary(fun = mean, geom = "point", shape = 23, size = 3.5, fill = "white", color = "black") +
+  # The diamonds are the ARITHMETIC means (computed from the raw values). Using
+  # stat_summary(fun = mean) here would be wrong on the log panel, where ggplot
+  # would average the logged values and show the geometric mean instead.
+  geom_point(data = group_tbl, aes(y = mean), shape = 23, size = 3.5, fill = "white", color = "black") +
   scale_color_manual(values = unname(pal[c("blue", "orange", "green")])) +
   labs(x = "Brain region", y = "Firing rate (spikes/s)") +
   theme(legend.position = "none")
@@ -277,9 +280,11 @@ median(x)
 
 
 # ---- 12. Simulations: why the formulas are what they are ---------------------
-set.seed(123)
 
 # 12a. Why do we divide by n - 1 when computing a sample variance?
+# (Each simulation below sets its own seed, exactly as in the notebook, so the
+# numbers match the notebook.)
+set.seed(123)
 # Draw many small samples (n = 5) from a population whose TRUE variance is 1.
 # Dividing the sum of squares by n gives an average that is too small ("biased");
 # dividing by n - 1 gives an average of 1.
@@ -290,6 +295,7 @@ sim_var <- replicate(10000, {
 sim_var |> summarize(across(everything(), mean))
 
 # 12b. The SAMPLING DISTRIBUTION of the mean. We treat a log-normal distribution
+set.seed(123)
 # fitted to our data as the "population" and take many samples of size n.
 mu_hat    <- mean(log(x))
 sigma_hat <- sd(log(x))
@@ -318,6 +324,7 @@ fig_clt <- sims_means |>
 print(fig_clt)
 
 # 12c. How often does the usual 95% t interval for the mean contain the TRUE mean?
+set.seed(123)
 # (If the method worked perfectly, 95% of the time.)
 coverage <- function(n, n_sims = 10000) {
   m <- matrix(rlnorm(n * n_sims, mu_hat, sigma_hat), nrow = n)

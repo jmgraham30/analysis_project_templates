@@ -22,6 +22,13 @@ Template R projects for an undergraduate **neuroscience research methods** cours
 
 Where appropriate, each project's notebook illustrates **null hypothesis testing** (including Type I and Type II errors), **effect size**, and **power**, and shows how to **write up and present results** in a publication-style format.
 
+## Guides for planning your own project
+
+The `guides/` folder holds two documents to use *before* you analyze anything:
+
+- **`choosing_a_test.qmd`**: a decision guide that takes you from your research question and study design to the right analysis (and the template project that models it).
+- **`analysis_plan_template.qmd`**: a fill-in analysis plan (hypotheses, design, sample size and power, exclusion rules, planned analysis) to complete before collecting data.
+
 ## What is inside each project
 
 ```
@@ -62,12 +69,12 @@ Think of it like a lab notebook with its own labeled shelf: everything for one e
 
 ### Packages used
 
-The projects use the **tidyverse** (`dplyr`, `ggplot2`, `readr`, `purrr`, and friends) and tidyverse-friendly packages: `here`, `broom`, `effectsize`, `pwr`, `knitr`, `kableExtra`, and `patchwork`. Other packages may be added in later projects (for example `rstatix` and `emmeans` for ANOVA). Each project's `R/00_setup.R` installs anything missing.
+The projects use the **tidyverse** (`dplyr`, `ggplot2`, `readr`, `purrr`, and friends) and tidyverse-friendly packages: `here`, `broom`, `effectsize`, `pwr`, `knitr`, `kableExtra`, and `patchwork`. `rstatix` and `emmeans` are used for the ANOVA projects, and `car` is mentioned in one exercise. The projects were written for **R 4.1 or newer** and a current tidyverse (**dplyr 1.1 or newer**); if R says a function is "not found", update your packages. Each project's `R/00_setup.R` installs anything missing (this needs an internet connection the first time).
 
 ## Conventions used throughout
 
 - **Tidyverse style** wherever possible (pipes, `dplyr` verbs, `ggplot2`).
-- **Colorblind-friendly palettes** (the Okabe-Ito palette) in all figures.
+- **Colorblind-friendly palettes** (the Okabe-Ito palette, or viridis) in all figures.
 - **APA-style reporting** of statistics (test statistic, degrees of freedom, exact *p*, effect size with confidence interval).
 - **American English** in text, code, and comments.
 - **Relative paths** built with the `here` package, so projects run on any computer.

@@ -141,7 +141,7 @@ Tidy data work smoothly with `ggplot2`, `dplyr`, and almost every statistics fun
 ## Rules for entering data in a spreadsheet
 - Use **one header row** with short names (no spaces or symbols; put units in the name, such as `weight_g`).
 - Use **one spelling** for each category (`Vehicle`, never `vehicle`, `VEH`, or `Vehicle ` with a trailing space).
-- Write **dates as YYYY-MM-DD**. Then `03/04` can never be confused between March 4 and April 3.
+- Write **dates as YYYY-MM-DD**. Then nobody has to guess whether 2026-03-04 means March 4 or April 3.
 - Leave a missing value **blank** (or `NA`). Never use 0 or -999, and never type comments or units in a numeric column. Put them in a separate `notes` column.
 - Do not use color or merged cells to carry information. Anything that matters must be in a cell.
 - Keep a **data dictionary** that explains every column (see `Data/README.md`).
@@ -218,7 +218,7 @@ count(raw, `Animal ID`) |> filter(n > 1)              # IDs that appear more tha
 raw |> filter(`Animal ID` == "M27")                   # are the two rows identical?
 ```
 
-R treats each spelling in @tbl-raw-labels as a different group, so counting or plotting by treatment would give **six** groups instead of two. The raw file also has one animal ID entered twice with identical values (M27) and, as we will see, one ID typed in lowercase.
+R treats each spelling in @tbl-raw-labels as a different group, so counting or plotting by treatment would give **six** groups instead of two. (The raw file actually contains eight spellings: `"Vehicle "` and `"Drug "` have a trailing space. The `read_csv()` function silently trims leading and trailing spaces when it imports a file, so those two are already merged with `"Vehicle"` and `"Drug"` here. Other software, or `read_csv(..., trim_ws = FALSE)`, would show all eight.) The raw file also has one animal ID entered twice with identical values (M27) and, as we will see, one ID typed in lowercase.
 
 ## Cleaning the behavior file {#sec-clean}
 
@@ -324,10 +324,22 @@ dat |>
   pub_table(align = "lcccc")
 ```
 
-The value `r implausible$weight_g` g for mouse `r implausible$mouse_id` is impossible, but `r implausible$weight_g / 10` g is exactly in line with the same mouse's other weights. By rule 4 it is a decimal-point typo, so we correct it and **keep a record** of the correction.
+The value `r implausible$weight_g` g for mouse `r implausible$mouse_id` is impossible, but `r fmt_num(implausible$weight_g / 10, 1)` g is exactly in line with the same mouse's other weights. By rule 4 it is a decimal-point typo, so we correct it and **keep a record** of the correction.
 
 ```{r}
 #| label: fix-m18
+# Rule 4, checked in code for the flagged value: does dividing by 10 agree (within
+# 3 g) with the same mouse's other plausible weights? stopifnot() stops the
+# notebook if there is more than one flagged value, or if the rule does not hold.
+other_mean <- dat |>
+  filter(mouse_id == implausible$mouse_id) |>
+  select(starts_with("weight_g")) |>
+  unlist() |>
+  (\(w) mean(w[!is.na(w) & w >= weight_min & w <= weight_max]))()
+stopifnot(nrow(implausible) == 1, abs(implausible$weight_g / 10 - other_mean) <= 3)
+
+# Only one value breaks the range, so we correct it directly. (With many such
+# values, you would write a function that applies rule 4 to each one.)
 dat <- dat |>
   mutate(weight_g_wk2 = if_else(mouse_id == "M18" & weight_g_wk2 == 260, 26.0, weight_g_wk2))
 log_step("Implausible weight (260 g, mouse M18, week 2)", nrow(implausible),
@@ -542,7 +554,7 @@ For categorical data, a **bar chart of counts** (the bars start at zero).
 ```{r}
 #| label: fig-counts
 #| fig-cap: "Number of mice in each genotype and treatment group."
-#| fig-alt: "Bar chart with two panels, WT and KO. In each panel, a blue bar for vehicle and an orange bar for drug, each of height 10 mice."
+#| fig-alt: "Bar chart with two panels, WT and KO. In each panel, a blue bar for vehicle and an red-orange bar for drug, each of height 10 mice."
 #| fig-width: 5.5
 #| fig-height: 3.5
 mice |>
@@ -563,7 +575,7 @@ A **histogram** shows the shape, center, and spread, and reveals unusual values.
 ```{r}
 #| label: fig-dist
 #| fig-cap: "Distributions of (A) distance traveled and (B) time in the center of the open field, for all mice with data."
-#| fig-alt: "Two histograms. Panel A, distance traveled, is spread roughly symmetrically around 50 meters with a few higher values. Panel B, time in center, is skewed to the right: most mice spent 20 to 50 seconds, with a few spending 80 to 110 seconds."
+#| fig-alt: "Two histograms. Panel A, distance traveled, is spread roughly symmetrically around 50 meters with a few higher values. Panel B, time in center, is skewed to the right: most mice spent 20 to 50 seconds, with two mice spending about 94 and 112 seconds."
 #| fig-width: 8
 #| fig-height: 3.5
 fig_hist <- ggplot(mice, aes(distance_m)) +
@@ -588,12 +600,12 @@ Distance is spread fairly symmetrically (mean `r fmt_num(mean(dist), 1)`, median
 
 ### A numeric variable by group
 
-For comparing groups, show **every animal** plus a summary (a box plot). Bars of means hide everything that matters.
+For comparing groups, show **every animal** plus a summary (a box plot). Bars of means hide the spread, the shape, and the sample size.
 
 ```{r}
 #| label: fig-groups
 #| fig-cap: "Distance traveled in the open field by treatment, separately for each genotype. Each point is one mouse; boxes show the median and interquartile range."
-#| fig-alt: "Dot plots with box plots for vehicle (blue circles) and drug (orange triangles) in two panels, WT and KO. In the WT panel the groups overlap substantially. In the KO panel, the drug group has higher distances than the vehicle group, with a wide spread."
+#| fig-alt: "Dot plots with box plots for vehicle (blue circles) and drug (red-orange triangles) in two panels, WT and KO. In the WT panel the groups overlap substantially. In the KO panel, the drug group has higher distances than the vehicle group, with a wide spread."
 #| fig-width: 6.5
 #| fig-height: 4
 fig_groups <- ggplot(mice, aes(treatment, distance_m, color = treatment, shape = treatment)) +
@@ -623,7 +635,7 @@ ggplot(mice, aes(weight_g_wk3, distance_m, color = sex, shape = sex)) +
        color = "Sex", shape = "Sex")
 ```
 
-Looking at this plot we can describe how the points are arranged, and nothing more. A *relationship you can see in a scatter plot* is what the **correlation and regression** project quantifies. Note that the heavier mice are mostly male, which is a reminder that **sex can be a confounding variable** here.
+Looking at this plot we can describe how the points are arranged, and nothing more. A *relationship you can see in a scatter plot* is what the **correlation and regression** project quantifies. Note that the heavier mice are mostly male, which is a reminder that **sex could confound a weight-distance relationship**, because it affects both body weight and distance traveled.
 
 ### Change over time
 
@@ -632,7 +644,7 @@ For repeated measurements, plot each animal's **trajectory** (thin lines) with t
 ```{r}
 #| label: fig-time
 #| fig-cap: "Body weight over the three weeks, by treatment, separately for each genotype. Thin lines are individual mice; thick lines show the group mean and standard error (SE) of the mean."
-#| fig-alt: "Line plots of body weight over weeks 0 to 3 in two panels, WT and KO. Thin lines show individual mice. In both panels the mean weight of vehicle mice (blue, solid) rises over the weeks, while the mean weight of drug mice (orange, dashed) stays flat or falls slightly."
+#| fig-alt: "Line plots of body weight over weeks 0 to 3 in two panels, WT and KO. Thin lines show individual mice. In both panels the mean weight of vehicle mice (blue, solid) rises over the weeks, while the mean weight of drug mice (red-orange, dashed) stays flat or falls slightly."
 #| fig-width: 7.5
 #| fig-height: 4
 week_means <- weights_long |>
@@ -670,7 +682,7 @@ The same data can give very different impressions depending on the display. @fig
 
 ```{r}
 #| label: fig-bad
-#| fig-cap: "The same data displayed three ways. (A) Bars with a truncated y-axis exaggerate the difference. (B) Bars alone hide the data. (C) Showing every point, with the mean and 95% confidence interval, lets the reader judge for themselves."
+#| fig-cap: "The same data displayed three ways. (A) Bars (mean ± SE) with a truncated y-axis exaggerate the difference. (B) Bars (mean ± SE) alone hide the data. (C) Showing every point, with the mean and 95% confidence interval, lets the reader judge for themselves."
 #| fig-alt: "Three panels of distance traveled for vehicle and drug. Panel A, bars with an axis starting at 45, make the drug bar look several times taller. Panel B, bars starting at zero, show a modest difference with error bars. Panel C shows all individual points overlapping substantially, with a black mean and confidence interval for each group."
 #| fig-width: 9
 #| fig-height: 3.8
@@ -682,7 +694,7 @@ bars_se <- mice |>
 bad1 <- ggplot(bars_se, aes(treatment, mean)) +
   geom_col(fill = "gray60", width = 0.5) +
   geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.15) +
-  coord_cartesian(ylim = c(45, 60)) +            # TRUNCATED axis exaggerates the difference
+  coord_cartesian(ylim = c(45, 65)) +            # TRUNCATED axis exaggerates the difference
   labs(title = "Truncated axis", x = NULL, y = "Distance traveled (m)")
 
 bad2 <- ggplot(bars_se, aes(treatment, mean)) +
@@ -771,7 +783,7 @@ Notice what the write-up does *not* say: it does not claim that the drug "reduce
 
 ::: {.callout-warning}
 ## Re-read the interpretation if your data change
-The numbers in the text update automatically, but the descriptions of patterns in the figures (and the alt text) do not. If you change the data or the analysis, re-read each figure and revise the text and alt text in your own words.
+The numbers (and any wording tied to them with inline R code) update automatically, but the *scientific interpretation* does not. Neither do hand-written sentences elsewhere in this notebook that describe a particular figure or table, or the figure descriptions (alt text). If you change the data or the analysis, re-read the conclusions, the limitations, and those descriptions, and revise them in your own words.
 :::
 
 **Limitations.**

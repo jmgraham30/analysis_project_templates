@@ -129,7 +129,16 @@ implausible    # one value: mouse M18, week 2
 # Compare with that mouse's other weights
 dat |> filter(mouse_id == "M18") |> select(mouse_id, starts_with("weight_g"))
 
-# 260 / 10 = 26.0, which agrees with 24, 24, 26.3 -> a decimal-point typo.
+# Rule 4: does 260 / 10 = 26.0 agree (within 3 g) with the other weights?
+other_mean <- dat |>
+  filter(mouse_id == "M18") |>
+  select(starts_with("weight_g")) |>
+  unlist() |>
+  (\(w) mean(w[!is.na(w) & w >= weight_min & w <= weight_max]))()
+stopifnot(nrow(implausible) == 1, abs(implausible$weight_g / 10 - other_mean) <= 3)
+
+# It does, so it is a decimal-point typo. Only one value breaks the range, so we
+# correct it directly. (With many, you would write a function to apply rule 4.)
 dat <- dat |>
   mutate(
     weight_g_wk2 = if_else(mouse_id == "M18" & weight_g_wk2 == 260, 26.0, weight_g_wk2)

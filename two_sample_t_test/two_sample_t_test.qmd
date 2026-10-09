@@ -199,9 +199,9 @@ Of the `r n_recorded` mice recorded, `r nrow(missing_mice)` (`r paste(missing_mi
 $$t = \frac{\bar{x}_1 - \bar{x}_2}{\sqrt{\dfrac{s_1^2}{n_1} + \dfrac{s_2^2}{n_2}}},$$
 where $\bar{x}$, $s$, and $n$ are each group's mean, standard deviation, and size. Welch's test adjusts the degrees of freedom for unequal spreads, so (unlike the classic Student's t-test) it does **not** assume equal variances. It is almost as powerful as Student's test when variances are equal and much more trustworthy when they are not, so it is a safe default (see @sec-welch; Delacre, Lakens, & Leys, 2017).
 - **Assumptions.** (1) Independence: each mouse is in one group and measured once, and mice do not influence each other; (2) the outcome is continuous; (3) the outcome is approximately normal **within each group** (checked with histograms, Q-Q plots, and the Shapiro–Wilk test); (4) no extreme outliers. We also compare the groups' spreads, but because Welch's test is used, equal variances are not required.
-- **Effect size.** The **raw difference** between means (in percentage points), and **Cohen's *d*** with a 95% confidence interval, $d = (\bar{x}_1 - \bar{x}_2)/s_{\text{pooled}}$. By convention, 0.2 is small, 0.5 is medium, and 0.8 is large, but these benchmarks should be interpreted in context.
+- **Effect size.** The **raw difference** between means (in percentage points), and **Cohen's *d*** with a 95% confidence interval, $d = (\bar{x}_1 - \bar{x}_2)/s_{\text{pooled}}$. By convention, 0.2 is small, 0.5 is medium, and 0.8 is large, but these benchmarks should be interpreted in context. (Because *d* uses the pooled SD, it is only a rough summary if the two groups' SDs are very different.)
 - **Confidence interval.** A 95% confidence interval for the mean difference.
-- **Robustness check.** A Wilcoxon rank-sum (Mann–Whitney) test, which does not assume normality.
+- **Robustness check.** A Wilcoxon rank-sum (Mann–Whitney) test, a rank-based test that does not assume normality. It asks whether values in one group tend to be larger than values in the other; it can be read as a comparison of medians when the two distributions have similar shapes.
 - **Software.** Analyses were run in `r R.version.string` using the tidyverse, `broom`, `rstatix`, `effectsize`, and `pwr`.
 
 ## Power and sample size plan {#sec-power-plan}
@@ -224,7 +224,7 @@ power_large  <- pwr.t2n.test(n1 = n1, n2 = n2, d = 0.8, sig.level = alpha)$power
 power_medium <- pwr.t2n.test(n1 = n1, n2 = n2, d = 0.5, sig.level = alpha)$power
 ```
 
-To detect a large effect ($d = 0.8$) with 80% power at $\alpha = .05$, we would need about **`r ceiling(plan$n)` mice per group** (always round up). With `r n1` and `r n2` mice, the smallest effect we could detect with 80% power is **$d$ = `r fmt_num(sens$d)`**. The power to detect a true large effect is about **`r round(100 * power_large)`%**, and for a medium effect about **`r round(100 * power_medium)`%**. This study was therefore **underpowered** for all but very large effects, which we should keep in mind when interpreting the results.
+To detect a large effect ($d = 0.8$) with 80% power at $\alpha = .05$, we would need about **`r ceiling(plan$n)` mice per group** (always round up). With `r n1` and `r n2` mice, the smallest effect we could detect with 80% power is **$d$ = `r fmt_num(sens$d)`**. The power to detect a true large effect is about **`r round(100 * power_large)`%**, and for a medium effect about **`r round(100 * power_medium)`%**. This study was therefore **underpowered** for all but very large effects, which we should keep in mind when interpreting the results. (These power calculations assume equal variances in the two groups, as for Student's test; when the spreads are similar, as here, they are a good guide for Welch's test too.)
 
 # Results and Conclusions {#sec-results}
 
@@ -328,7 +328,7 @@ shapiro_by_group |>
   pub_table(digits = 3, align = "lcc")
 ```
 
-- **Normality.** The Shapiro–Wilk test `r if (any(shapiro_by_group$p.value < alpha)) "indicated" else "did not indicate"` a departure from normality in either group (@tbl-assumptions), and the Q-Q plots (@fig-eda) agree.
+- **Normality.** The Shapiro–Wilk test `r if (any(shapiro_by_group$p.value < alpha)) "indicated" else "did not indicate"` a departure from normality in `r if (any(shapiro_by_group$p.value < alpha)) "at least one group" else "either group"` (@tbl-assumptions), and the Q-Q plots (@fig-eda) agree.
 - **Spread.** The larger group SD was `r fmt_num(sd_ratio)` times the smaller one, a mild difference. Levene's test of equal variances was `r if (levene$p < alpha) "significant" else "not significant"`, *F*(`r levene$df1`, `r levene$df2`) = `r fmt_num(levene$statistic)`, `r fmt_p(levene$p, md = TRUE)`. We use Welch's test either way.
 - **Outliers.** `r nrow(outliers)` observations were flagged as outliers (more than 1.5 × IQR beyond the quartiles) within their groups.
 
@@ -378,7 +378,7 @@ tt_tidy |>
   pub_table(digits = 2, align = "c")
 ```
 
-**Decision rule.** If $p < \alpha$, we reject $H_0$. Here `r fmt_p(p_value, md = TRUE)`, which is `r if (p_value < alpha) "less" else "not less"` than $\alpha$ = `r alpha`, so we **`r if (p_value < alpha) "reject" else "fail to reject"` $H_0$**.
+**Decision rule.** If $p < \alpha$, we reject $H_0$. Here `r fmt_p(p_value, md = TRUE)`, which is `r if (p_value < alpha) "less" else "not less"` than $\alpha$ = `r fmt_apa(alpha)`, so we **`r if (p_value < alpha) "reject" else "fail to reject"` $H_0$**.
 
 ::: {.callout-important}
 ## What a p-value is (and is not)
@@ -559,7 +559,7 @@ tibble(
   pub_table(align = "lc")
 ```
 
-Welch's test keeps its Type I error rate close to the 5% we intended (**`r scales::percent(mean(p_welch < alpha), accuracy = 0.1)`**). Student's test falsely rejects $H_0$ in about **`r scales::percent(mean(p_student < alpha), accuracy = 0.1)`** of experiments, several times more often than its nominal rate, because its pooled variance is a poor summary when spreads differ. In our actual data the spreads are similar, so the two tests agree closely; but since we usually cannot be sure of that, Welch's test is the sensible default.
+Welch's test keeps its Type I error rate close to the 5% we intended (**`r scales::percent(mean(p_welch < alpha), accuracy = 0.1)`**). Student's test falsely rejects $H_0$ in about **`r scales::percent(mean(p_student < alpha), accuracy = 0.1)`** of experiments, far more often than its nominal 5%, because its pooled variance is a poor summary when spreads differ. In our actual data the spreads are similar, so the two tests agree closely; but since we usually cannot be sure of that, Welch's test is the sensible default.
 
 ## Robustness check
 
@@ -589,7 +589,7 @@ Of the `r n_recorded` mice tested, `r nrow(missing_mice)` stress mouse could not
 
 ::: {.callout-warning}
 ## Re-read the interpretation if your data change
-The numbers and the reject/fail-to-reject wording above update automatically, but the *scientific interpretation* does not. If you change the data or the analysis, re-read this section and revise it in your own words.
+The numbers (and any wording tied to them with inline R code) update automatically, but the *scientific interpretation* does not. Neither do hand-written sentences elsewhere in this notebook that describe a particular figure or table, or the figure descriptions (alt text). If you change the data or the analysis, re-read the conclusions, the limitations, and those descriptions, and revise them in your own words.
 :::
 
 **Limitations.**

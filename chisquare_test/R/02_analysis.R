@@ -406,11 +406,27 @@ robust_tbl <- tibble(
 robust_tbl
 
 # Part A: the goodness-of-fit p-value is close to .05, so check it two other ways.
-# (a) A Monte Carlo p-value: simulate 10,000 samples of the same size from the
-#     1 : 2 : 1 ratio and see how often chi-square is at least as large as ours.
-set.seed(123)
-gof_mc <- chisq.test(obs_geno$n, p = mendel, simulate.p.value = TRUE, B = 10000)
-gof_mc$p.value
+# (a) An EXACT p-value. With 3 categories and 120 pups we can list every possible
+#     set of genotype counts, compute each one's probability under H0, and add up
+#     the probabilities of all outcomes whose chi-square statistic is at least as
+#     large as ours. No approximation is involved. (For tables with many cells,
+#     the same idea is done by simulation: chisq.test(..., simulate.p.value = TRUE).)
+exact_multinom_p <- function(obs, p) {
+  N <- sum(obs)
+  expected <- N * p
+  chi_stat <- function(counts) sum((counts - expected)^2 / expected)
+  all_outcomes <- expand_grid(a = 0:N, b = 0:N) |>
+    filter(a + b <= N) |>
+    mutate(c = N - a - b)
+  all_outcomes |>
+    mutate(stat = pmap_dbl(list(a, b, c), ~ chi_stat(c(..1, ..2, ..3))),
+           prob = pmap_dbl(list(a, b, c), ~ dmultinom(c(..1, ..2, ..3), prob = p))) |>
+    filter(stat >= chi_stat(obs) - 1e-9) |>
+    summarize(p = sum(prob)) |>
+    pull(p)
+}
+gof_exact_p <- exact_multinom_p(obs_geno$n, mendel)
+gof_exact_p
 # (b) The likelihood-ratio (G) test for the same counts.
 G_geno <- 2 * sum(obs_geno$n * log(obs_geno$n / (N_geno * mendel)))
 pchisq(G_geno, df = 2, lower.tail = FALSE)

@@ -16,7 +16,7 @@ Extracellular recordings from 120 neurons in three brain regions (Cortex, Hippoc
 | `cell_type` | nominal | Regular spiking (RS) or fast spiking (FS); about 20% FS |
 | `firing_rate_hz` | ratio (continuous) | Average firing rate, spikes per second. Right-skewed (lognormal) |
 | `spike_width_ms` | ratio (continuous) | Trough-to-peak spike width in milliseconds. Roughly symmetric; narrower in FS cells |
-| `tuning_rating` | ordinal | Rated stimulus selectivity, 1 (none) to 5 (very sharp) |
+| `tuning_rating` | ordinal | Rated stimulus selectivity, 1 (none) to 5 (very clear) |
 
 There are no missing values.
 

@@ -124,6 +124,11 @@ tribble(
 
 Random assignment in Part B is a strength of the design: because mice were assigned to pretreatments by chance, a difference in seizure rates can reasonably be attributed to the drug rather than to pre-existing differences among the mice. Groups of equal size make the design **balanced**.
 
+::: {.callout-note}
+## A note on how these data were chosen
+Because these data are simulated, we could choose the random seed. We used a rule set in advance: take the first seed whose samples have effect sizes close to the true ones (see `R/01_simulate_data.R`). Our first attempt, with 96 pups, gave a genotype *p*-value almost exactly at .05, so we increased the sample to 120 pups and applied the rule again; the result was still close to the cutoff (*p* = .049), and we kept it on purpose to show why a *p*-value near .05 deserves caution. A real experiment gets one sample and no chance to choose, so real results will usually look less tidy.
+:::
+
 ## Procedure
 
 **Part B.** Thirty minutes after pretreatment, each mouse received an injection of a convulsant drug. Each mouse was then observed for 30 minutes and scored **Yes** if it had a generalized seizure and **No** otherwise. *(In a real notebook, give the drugs, doses, route, timing, the seizure scoring criteria, and whether the observer was blind to pretreatment. Blind scoring protects against unintentional bias.)*
@@ -207,7 +212,7 @@ where $O$ is the observed count in a category and $E = N \times p$ is the count 
 - **Assumptions.** (1) **Independence of observations**: each animal contributes **one** observation to one cell, and animals do not influence each other. (2) **Counts, not percentages or measurements**, and the categories are mutually exclusive. (3) **Large enough expected counts**: a common rule of thumb is that every *expected* count should be at least 5 (some authors say at least 80% of cells at least 5 and none below 1). The rule is about **expected**, not observed, counts. If it fails, use an exact test.
 - **Effect size.** For Part A, **Cohen's *w***, $w = \sqrt{\chi^2 / N}$. For Part B, **phi** ($\varphi$, the same as Cramér's *V* for a 2 × 2 table), plus the more interpretable **difference in risk** (percentage points), **risk ratio**, **odds ratio**, and **Cohen's *h***. By convention, $w$ and $\varphi$ of .10, .30, and .50 are small, medium, and large; *h* of .2, .5, and .8 are small, medium, and large. All come with 95% confidence intervals.
 - **Follow-up.** **Adjusted standardized residuals** show which cells depart from the null hypothesis (values beyond about ±2 are notable; with several cells, expect an occasional chance exception).
-- **Robustness checks.** Yates-corrected chi-square, the likelihood-ratio ($G$) test, Fisher's exact test, and (for Part A) a Monte Carlo p-value.
+- **Robustness checks.** Yates-corrected chi-square, the likelihood-ratio ($G$) test, Fisher's exact test, and (for Part A) an exact multinomial test, which does not rely on the chi-square approximation.
 - **Software.** Analyses were run in `r R.version.string` using the tidyverse, `broom`, `effectsize`, and `pwr`.
 
 ## Power and sample size plan {#sec-power-plan}
@@ -291,16 +296,32 @@ The knockout genotype appears **less often than expected**: `r gof_detail$n[gof_
 
 ### The goodness-of-fit test {#sec-test-a}
 
-The statistic is $\chi^2$(`r gof_tbl$parameter`, *N* = `r N_geno`) = `r fmt_num(gof_tbl$statistic)`, `r fmt_p(gof_tbl$p.value, md = TRUE)`. **Decision rule:** $p$ is `r if (gof_tbl$p.value < alpha) "less" else "not less"` than $\alpha$ = `r alpha`, so we **`r if (gof_tbl$p.value < alpha) "reject" else "fail to reject"` $H_0$**: `r if (gof_tbl$p.value < alpha) "the genotype counts are not consistent with a 1 : 2 : 1 ratio." else "the genotype counts are consistent with a 1 : 2 : 1 ratio."`
+The statistic is $\chi^2$(`r gof_tbl$parameter`, *N* = `r N_geno`) = `r fmt_num(gof_tbl$statistic)`, `r fmt_p(gof_tbl$p.value, md = TRUE)`. **Decision rule:** $p$ is `r if (gof_tbl$p.value < alpha) "less" else "not less"` than $\alpha$ = `r fmt_apa(alpha)`, so we **`r if (gof_tbl$p.value < alpha) "reject" else "fail to reject"` $H_0$**: `r if (gof_tbl$p.value < alpha) "the genotype counts are not consistent with a 1 : 2 : 1 ratio." else "the genotype counts are consistent with a 1 : 2 : 1 ratio."`
 
-The effect size is Cohen's $w$ = `r fmt_apa(w_geno$Cohens_w)`, 95% CI [`r fmt_apa(w_geno$CI_low)`, `r fmt_apa(w_geno$CI_high)`], between small and medium. The confidence interval is wide: it includes effects close to zero and effects that would be large.
+The effect size is Cohen's $w$ = `r fmt_apa(w_geno$Cohens_w)`, 95% CI [`r fmt_apa(w_geno$CI_low)`, `r fmt_apa(w_geno$CI_high)`], between small and medium. The confidence interval is wide: the data are compatible with a negligible effect and with one larger than medium. (Confidence intervals for $w$ and $\varphi$ come from a different calculation than the test itself, and the lower limit is cut off at 0, so such an interval can touch 0 even when *p* is just below .05. The interval for the risk difference, below, is a more direct guide.)
 
 The **adjusted standardized residuals** show where the discrepancy comes from: `r paste0(gof_detail$genotype, " (", fmt_num(gof_detail$std_resid), ")", collapse = ", ")`. The knockout count is the one that departs most from its expected value, in the direction of too few knockouts.
 
 ::: {.callout-warning}
 ## A p-value near .05 is fragile
-Our *p*-value is very close to the .05 cutoff. The chi-square test is only an *approximation*, and different equally reasonable ways of computing the *p*-value can land on either side of .05 (see @sec-robust, where the Monte Carlo and likelihood-ratio versions bracket the cutoff). Treating .05 as a cliff, with *p* = .049 "significant" and *p* = .054 "not significant," makes little sense: the evidence is essentially the same. Report the exact *p*-value and the effect size with its confidence interval, describe the result as **suggestive** rather than conclusive, and consider replication.
+Our *p*-value is very close to the .05 cutoff. Treating .05 as a cliff, with *p* = .049 "significant" and *p* = .054 "not significant," makes little sense: the evidence is essentially the same. Here, the likelihood-ratio and exact tests in @sec-robust give nearly the same answer, but a different sample would not: changing the genotype of just one pup (from heterozygous to knockout) would push the *p*-value above .05. Report the exact *p*-value and the effect size with its confidence interval, describe the result as **suggestive** rather than conclusive, and consider replication.
 :::
+
+### Checking independence: the litters {#sec-litters}
+
+The goodness-of-fit test treats all `r N_geno` pups as independent, but pups born to the same mother may be more alike than pups from different litters. A simple informal check: if litters behave alike, the number of knockouts per litter should vary only by chance, with a standard deviation of about $\sqrt{n \times .25 \times .75}$ for a litter of $n$ pups.
+
+```{r}
+#| label: litter-check
+litter_tbl <- geno |>
+  group_by(litter) |>
+  summarize(size = n(), ko = sum(genotype == "KO"), .groups = "drop")
+
+sd_ko_observed <- sd(litter_tbl$ko)
+sd_ko_chance   <- sqrt(mean(litter_tbl$size) * mendel[["KO"]] * (1 - mendel[["KO"]]))
+```
+
+The `r nrow(litter_tbl)` litters had between `r min(litter_tbl$ko)` and `r max(litter_tbl$ko)` knockout pups each (`r fmt_num(mean(litter_tbl$ko), 1)` on average; `r fmt_num(mean(litter_tbl$size) * mendel[["KO"]], 1)` expected). The standard deviation of the knockout count across litters was `r fmt_num(sd_ko_observed, 2)`, compared with about `r fmt_num(sd_ko_chance, 2)` expected by chance alone if litters behaved alike. `r if (sd_ko_observed > 1.5 * sd_ko_chance) "The litters vary more than chance predicts, so the independence assumption is doubtful and the *p*-value above may be too small." else "There is no sign that the litters differ more than chance predicts, so treating the pups as independent is reasonable here (with only 15 litters of 8, this check cannot detect small litter effects)."`
 
 ## Part B: Is seizure related to pretreatment? {#sec-results-b}
 
@@ -371,7 +392,7 @@ as_tibble(pearson$expected, rownames = NULL) |>
   pub_table(align = "lcccc")
 ```
 
-The Pearson chi-square test gives $\chi^2$(`r pearson_tbl$parameter`, *N* = `r N`) = `r fmt_num(pearson_tbl$statistic)`, `r fmt_p(pearson_tbl$p.value, md = TRUE)`. **Decision rule:** $p$ is `r if (pearson_tbl$p.value < alpha) "less" else "not less"` than $\alpha$ = `r alpha`, so we **`r if (pearson_tbl$p.value < alpha) "reject" else "fail to reject"` $H_0$**: `r if (pearson_tbl$p.value < alpha) "the data are not consistent with seizure being independent of pretreatment. Seizures were less common after the drug." else "we do not have evidence that seizure depends on pretreatment."` For a 2 × 2 table the residuals all have the same size (`r fmt_num(abs(pearson$stdres[1, 1]))`) and are just the square root of the chi-square statistic, so they add nothing here; they become informative in larger tables.
+The Pearson chi-square test gives $\chi^2$(`r pearson_tbl$parameter`, *N* = `r N`) = `r fmt_num(pearson_tbl$statistic)`, `r fmt_p(pearson_tbl$p.value, md = TRUE)`. **Decision rule:** $p$ is `r if (pearson_tbl$p.value < alpha) "less" else "not less"` than $\alpha$ = `r fmt_apa(alpha)`, so we **`r if (pearson_tbl$p.value < alpha) "reject" else "fail to reject"` $H_0$**: `r if (pearson_tbl$p.value < alpha) "the data are not consistent with seizure being independent of pretreatment. Seizures were less common after the drug." else "we do not have evidence that seizure depends on pretreatment."` For a 2 × 2 table the residuals all have the same size (`r fmt_num(abs(pearson$stdres[1, 1]))`) and are just the square root of the chi-square statistic, so they add nothing here; they become informative in larger tables.
 
 ::: {.callout-important}
 ## What a p-value is (and is not)
@@ -436,7 +457,7 @@ tribble(
   pub_table(align = "lccl")
 ```
 
-The **risk difference** is usually the easiest to explain: the drug lowered the seizure rate by about **`r fmt_num(abs(100 * rd_hat), 0)` percentage points** (from `r fmt_num(100 * rd$estimate2, 0)`% to `r fmt_num(100 * rd$estimate1, 0)`%), though the confidence interval is wide, from a small to a large reduction. The seizure risk after the drug was about **`r fmt_num(rr_hat)` times** the vehicle risk, and the odds were about **`r fmt_num(or_hat)` times** the vehicle odds. The odds ratio is further from 1 than the risk ratio because seizures are common here (an odds ratio overstates a risk ratio unless the event is rare, so do not describe an odds ratio as "times as likely"). The association is small-to-medium by convention ($\varphi$ = `r fmt_apa(phi_es$phi)`).
+The **risk difference** is usually the easiest to explain: the drug `r if (rd_hat < 0) "lowered" else "raised"` the seizure rate by about **`r fmt_num(abs(100 * rd_hat), 0)` percentage points** (from `r fmt_num(100 * rd$estimate2, 0)`% to `r fmt_num(100 * rd$estimate1, 0)`%), though the confidence interval is wide, from a small to a large reduction. The seizure risk after the drug was about **`r fmt_num(rr_hat)` times** the vehicle risk, and the odds were about **`r fmt_num(or_hat)` times** the vehicle odds. The odds ratio is further from 1 than the risk ratio because seizures are common here (an odds ratio overstates a risk ratio unless the event is rare, so do not describe an odds ratio as "times as likely"). The association is small-to-medium by convention ($\varphi$ = `r fmt_apa(phi_es$phi)`).
 
 ```{r}
 #| label: fig-main
@@ -448,7 +469,7 @@ fig_a <- ggplot(group_ci, aes(treatment, 100 * estimate, fill = treatment)) +
   geom_col(width = 0.55) +
   geom_errorbar(aes(ymin = 100 * conf.low, ymax = 100 * conf.high), width = 0.15,
                 linewidth = 0.8) +
-  geom_text(aes(label = paste0(n_yes, "/", n), y = 3), color = "white",
+  geom_text(aes(label = paste0(n_yes, "/", n), y = 3), color = "black",
             fontface = "bold", size = 4) +
   scale_fill_manual(values = unname(pal[c("gray", "orange")]), guide = "none") +
   scale_y_continuous(limits = c(0, 100), expand = c(0, 0)) +
@@ -572,8 +593,8 @@ sim_summary |>
 
 How to read @tbl-sim:
 
-- **Rows 1 and 2 ($H_0$ true): every percentage is a Type I error rate.** With 50 mice per group the Pearson test falsely rejects in about **`r scales::percent(sim_summary$p_pearson[2], accuracy = 0.1)`** of experiments, close to the intended 5%; Yates' correction and Fisher's test are **conservative** (**`r scales::percent(sim_summary$p_yates[2], accuracy = 0.1)`**, below 5%). With only 8 per group, the picture gets worse: the Pearson test rejects falsely in about **`r scales::percent(sim_summary$p_pearson[1], accuracy = 0.1)`** (above 5%, because the chi-square approximation is poor), while Yates and Fisher fall to about **`r scales::percent(sim_summary$p_fisher[1], accuracy = 0.1)`**. Because the counts are whole numbers, the exact tests cannot hit exactly 5%.
-- **Rows 3 and 4 ($H_1$ true): the percentages are power.** At our study size, the Pearson test has power of about **`r scales::percent(sim_summary$p_pearson[4], accuracy = 0.1)`** (the formula in `pwr` gives `r scales::percent(theory_power, accuracy = 0.1)`), so it commits a Type II error in about **`r scales::percent(1 - sim_summary$p_pearson[4], accuracy = 0.1)`** of experiments, even though the drug really works. The conservative tests have lower power (**`r scales::percent(sim_summary$p_fisher[4], accuracy = 0.1)`** for Fisher's test). With 8 mice per group, power is only about **`r scales::percent(sim_summary$p_pearson[3], accuracy = 0.1)`** for Pearson and **`r scales::percent(sim_summary$p_fisher[3], accuracy = 0.1)`** for Fisher: such a small study would usually miss a real effect of this size.
+- **Rows 1 and 2 ($H_0$ true): every percentage is a Type I error rate.** With 50 mice per group the Pearson test falsely rejects in about **`r scales::percent(sim_summary$p_pearson[2], accuracy = 0.1)`** of experiments, only slightly above the intended 5%; Yates' correction and Fisher's test are **conservative** (**`r scales::percent(sim_summary$p_yates[2], accuracy = 0.1)`**, below 5%). With only 8 per group, the picture gets worse: the Pearson test rejects falsely in about **`r scales::percent(sim_summary$p_pearson[1], accuracy = 0.1)`** (above 5%, because the chi-square approximation is poor), while Yates and Fisher fall to about **`r scales::percent(sim_summary$p_fisher[1], accuracy = 0.1)`**. Because the counts are whole numbers, the exact tests cannot hit exactly 5%.
+- **Rows 3 and 4 ($H_1$ true): the percentages are power.** At our study size, the Pearson test has power of about **`r scales::percent(sim_summary$p_pearson[4], accuracy = 0.1)`** (the formula in `pwr` gives `r scales::percent(theory_power, accuracy = 0.1)`), so it commits a Type II error in about **`r scales::percent(1 - sim_summary$p_pearson[4], accuracy = 0.1)`** of experiments, even though the drug really works. The conservative tests have lower power (the price of a lower true false-positive rate) (**`r scales::percent(sim_summary$p_fisher[4], accuracy = 0.1)`** for Fisher's test). With 8 mice per group, power is only about **`r scales::percent(sim_summary$p_pearson[3], accuracy = 0.1)`** for Pearson and **`r scales::percent(sim_summary$p_fisher[3], accuracy = 0.1)`** for Fisher: such a small study would usually miss a real effect of this size.
 - Simulated rates have a little random error of their own: with 10,000 experiments, a rate near 5% is accurate to within about ±0.4 percentage points.
 
 ```{r}
@@ -645,9 +666,25 @@ robust_b <- tibble(
   p    = c(pearson$p.value, yates$p.value, p_G_b, fisher$p.value)
 )
 
-# Part A
-set.seed(123)
-gof_mc  <- chisq.test(obs_geno$n, p = mendel, simulate.p.value = TRUE, B = 10000)
+# Part A: an EXACT test. With only 3 categories and 120 pups we can list every
+# possible set of genotype counts (about 7,400 of them), compute each one's
+# probability under H0, and add up the probabilities of all outcomes whose
+# chi-square statistic is at least as large as ours.
+exact_multinom_p <- function(obs, p) {
+  N <- sum(obs)
+  expected <- N * p
+  chi_stat <- function(counts) sum((counts - expected)^2 / expected)
+  all_outcomes <- expand_grid(a = 0:N, b = 0:N) |>
+    filter(a + b <= N) |>
+    mutate(c = N - a - b)
+  all_outcomes |>
+    mutate(stat = pmap_dbl(list(a, b, c), ~ chi_stat(c(..1, ..2, ..3))),
+           prob = pmap_dbl(list(a, b, c), ~ dmultinom(c(..1, ..2, ..3), prob = p))) |>
+    filter(stat >= chi_stat(obs) - 1e-9) |>
+    summarize(p = sum(prob)) |>
+    pull(p)
+}
+gof_exact_p <- exact_multinom_p(obs_geno$n, mendel)
 G_geno  <- 2 * sum(obs_geno$n * log(obs_geno$n / (N_geno * mendel)))
 p_G_geno <- pchisq(G_geno, df = 2, lower.tail = FALSE)
 ```
@@ -659,14 +696,14 @@ bind_rows(
   mutate(robust_b, Part = "B: seizure by pretreatment", .before = 1),
   tibble(Part = "A: genotype ratio",
          Test = c("Pearson chi-square (planned)", "Likelihood-ratio (G) test",
-                  "Monte Carlo (simulated) p-value"),
-         p    = c(gof$p.value, p_G_geno, gof_mc$p.value))
+                  "Exact multinomial test"),
+         p    = c(gof$p.value, p_G_geno, gof_exact_p))
 ) |>
-  mutate(p = fmt_p_col(p, digits = 3)) |>
+  mutate(p = fmt_p_col(p, digits = 4)) |>
   pub_table(align = "llc")
 ```
 
-**Part B.** The four tests give p-values between `r fmt_p_col(min(robust_b$p))` and `r fmt_p_col(max(robust_b$p))`; they `r if (all(robust_b$p < alpha)) "all agree" else "do not all agree"` on significance at $\alpha$ = `r alpha`. Yates' correction, which R applies by default to 2 × 2 tables, is the most conservative; many statisticians now consider it **too** conservative (as the simulation in @sec-sim showed), so we planned the uncorrected Pearson test. **Part A.** The three p-values are `r paste(fmt_p_col(c(gof$p.value, p_G_geno, gof_mc$p.value)), collapse = ", ")`: `r if (all(c(gof$p.value, p_G_geno, gof_mc$p.value) < alpha)) "all below" else if (all(c(gof$p.value, p_G_geno, gof_mc$p.value) >= alpha)) "all above" else "on both sides of"` the .05 cutoff, which is exactly the situation described in the callout in @sec-test-a.
+**Part B.** The four tests give p-values between `r fmt_p_col(min(robust_b$p))` and `r fmt_p_col(max(robust_b$p))`; they `r if (all(robust_b$p < alpha)) "all agree" else "do not all agree"` on significance at $\alpha$ = `r fmt_apa(alpha)`. Yates' correction, which R applies by default to 2 × 2 tables, is the most conservative; many statisticians now consider it **too** conservative (as the simulation in @sec-sim showed), so we planned the uncorrected Pearson test. **Part A.** The three p-values are `r paste(fmt_p_col(c(gof$p.value, p_G_geno, gof_exact_p), digits = 4), collapse = ", ")`: `r if (all(c(gof$p.value, p_G_geno, gof_exact_p) < alpha)) "all below" else if (all(c(gof$p.value, p_G_geno, gof_exact_p) >= alpha)) "all above" else "on both sides of"` the .05 cutoff. The **likelihood-ratio ($G$) test** is a close cousin of Pearson's test that compares the observed and expected counts using logarithms of their ratios. The **exact multinomial test** needs no approximation at all (it adds up the probabilities of every possible set of counts at least as extreme as ours; see the code), so it is the reference value here. (For tables with many cells, the same idea is applied by simulation, which is what `chisq.test(..., simulate.p.value = TRUE)` does.) Either way, the result sits almost exactly at the cutoff, as described in the callout in @sec-test-a.
 
 ## Results write-up {#sec-writeup}
 
@@ -675,18 +712,18 @@ Below is how the results would be written in the Results section of a report. Th
 ::: {.callout-note icon=false appearance="simple"}
 ### Results
 
-**Genotype ratio.** The genotypes of the `r N_geno` pups were `r gof_detail$n[1]` wild type (`r fmt_num(100 * gof_detail$n[1] / N_geno, 1)`%), `r gof_detail$n[2]` heterozygous (`r fmt_num(100 * gof_detail$n[2] / N_geno, 1)`%), and `r gof_detail$n[3]` knockout (`r fmt_num(100 * gof_detail$n[3] / N_geno, 1)`%). A chi-square goodness-of-fit test `r if (gof_tbl$p.value < alpha) "indicated" else "did not indicate"` a departure from the expected Mendelian 1 : 2 : 1 ratio, $\chi^2$(`r gof_tbl$parameter`, *N* = `r N_geno`) = `r fmt_num(gof_tbl$statistic)`, `r fmt_p(gof_tbl$p.value, md = TRUE)`, Cohen's *w* = `r fmt_apa(w_geno$Cohens_w)`, 95% CI [`r fmt_apa(w_geno$CI_low)`, `r fmt_apa(w_geno$CI_high)`]. The knockout genotype was under-represented (expected `r fmt_num(gof_detail$expected[3], 0)`; adjusted residual = `r fmt_num(gof_detail$std_resid[3])`). Because the *p*-value was close to .05 and alternative methods of computing it fell on both sides of .05 (Monte Carlo *p* = `r fmt_p_col(gof_mc$p.value)`), we regard this result as suggestive rather than conclusive.
+**Genotype ratio.** The genotypes of the `r N_geno` pups were `r gof_detail$n[1]` wild type (`r fmt_num(100 * gof_detail$n[1] / N_geno, 1)`%), `r gof_detail$n[2]` heterozygous (`r fmt_num(100 * gof_detail$n[2] / N_geno, 1)`%), and `r gof_detail$n[3]` knockout (`r fmt_num(100 * gof_detail$n[3] / N_geno, 1)`%). A chi-square goodness-of-fit test `r if (gof_tbl$p.value < alpha) "indicated" else "did not indicate"` a departure from the expected Mendelian 1 : 2 : 1 ratio, $\chi^2$(`r gof_tbl$parameter`, *N* = `r N_geno`) = `r fmt_num(gof_tbl$statistic)`, `r fmt_p(gof_tbl$p.value, md = TRUE)`, Cohen's *w* = `r fmt_apa(w_geno$Cohens_w)`, 95% CI [`r fmt_apa(w_geno$CI_low)`, `r fmt_apa(w_geno$CI_high)`]. The knockout genotype was under-represented (expected `r fmt_num(gof_detail$expected[3], 0)`; adjusted residual = `r fmt_num(gof_detail$std_resid[3])`). `r if (abs(gof_tbl$p.value - alpha) < 0.01) paste0("Because the *p*-value was essentially at the .05 cutoff (the exact test gave ", fmt_p(gof_exact_p, digits = 4, md = TRUE), "), we regard this result as suggestive rather than conclusive.") else paste0("The exact multinomial test gave ", fmt_p(gof_exact_p, digits = 4, md = TRUE), ".")`
 
-**Seizures.** A seizure occurred in `r fmt_num(100 * rd$estimate2, 0)`% of vehicle-pretreated mice (`r veh_yes`/`r veh_yes + veh_no`) and in `r fmt_num(100 * rd$estimate1, 0)`% of drug-pretreated mice (`r drug_yes`/`r drug_yes + drug_no`; see @fig-main A). A chi-square test of independence showed that seizure `r if (pearson_tbl$p.value < alpha) "was" else "was not"` significantly related to pretreatment, $\chi^2$(`r pearson_tbl$parameter`, *N* = `r N`) = `r fmt_num(pearson_tbl$statistic)`, `r fmt_p(pearson_tbl$p.value, md = TRUE)`, $\varphi$ = `r fmt_apa(phi_es$phi)`, 95% CI [`r fmt_apa(phi_es$CI_low)`, `r fmt_apa(phi_es$CI_high)`]. The drug lowered the seizure rate by `r fmt_num(abs(100 * rd_hat), 0)` percentage points (95% CI [`r fmt_num(abs(100 * rd$conf.high), 0)`, `r fmt_num(abs(100 * rd$conf.low), 0)`]; risk ratio = `r fmt_num(rr_hat)`, 95% CI [`r fmt_num(rr_ci[1])`, `r fmt_num(rr_ci[2])`]; odds ratio = `r fmt_num(or_hat)`, 95% CI [`r fmt_num(or_ci[1])`, `r fmt_num(or_ci[2])`]). All expected counts were at least 5. Fisher's exact test gave the same conclusion (`r fmt_p(fisher$p.value, md = TRUE)`).
+**Seizures.** A seizure occurred in `r fmt_num(100 * rd$estimate2, 0)`% of vehicle-pretreated mice (`r veh_yes`/`r veh_yes + veh_no`) and in `r fmt_num(100 * rd$estimate1, 0)`% of drug-pretreated mice (`r drug_yes`/`r drug_yes + drug_no`; see @fig-main A). A chi-square test of independence showed that seizure `r if (pearson_tbl$p.value < alpha) "was" else "was not"` significantly related to pretreatment, $\chi^2$(`r pearson_tbl$parameter`, *N* = `r N`) = `r fmt_num(pearson_tbl$statistic)`, `r fmt_p(pearson_tbl$p.value, md = TRUE)`, $\varphi$ = `r fmt_apa(phi_es$phi)`, 95% CI [`r fmt_apa(phi_es$CI_low)`, `r fmt_apa(phi_es$CI_high)`]. The drug `r if (rd_hat < 0) "lowered" else "raised"` the seizure rate by `r fmt_num(abs(100 * rd_hat), 0)` percentage points (95% CI [`r fmt_num(abs(100 * rd$conf.high), 0)`, `r fmt_num(abs(100 * rd$conf.low), 0)`]; risk ratio = `r fmt_num(rr_hat)`, 95% CI [`r fmt_num(rr_ci[1])`, `r fmt_num(rr_ci[2])`]; odds ratio = `r fmt_num(or_hat)`, 95% CI [`r fmt_num(or_ci[1])`, `r fmt_num(or_ci[2])`]). All expected counts were at least 5. Fisher's exact test gave the same conclusion (`r fmt_p(fisher$p.value, md = TRUE)`).
 :::
 
 ## Conclusions and limitations {#sec-conclusions}
 
-**Conclusions.** *Part A:* `r if (gof_tbl$p.value < alpha) "The genotype counts depart from the Mendelian ratio in a way that suggests the knockout is partly lethal: fewer knockout pups were born than expected. Because the evidence is close to the cutoff, this should be checked in a larger sample (more litters) before it is accepted." else "The data do not provide sufficient evidence that the genotype ratio departs from 1 : 2 : 1. This does not show that the knockout has no effect on survival; the study may have been too small to detect a modest departure."` *Part B:* `r if (pearson_tbl$p.value < alpha) "The data provide evidence that pretreatment with the drug reduces the chance of a seizure: the seizure rate was lower after the drug than after vehicle, by a small-to-medium amount." else "The data do not provide sufficient evidence that the drug changes the chance of a seizure. This does not show that it has no effect; the study may have been too small to detect a modest one."` The confidence intervals are wide in both parts, so the sizes of the effects are estimated imprecisely.
+**Conclusions.** *Part A:* `r if (gof_tbl$p.value < alpha) "The genotype counts depart from the Mendelian ratio in a way that is consistent with the knockout being partly lethal: fewer knockout pups were born than expected. Other explanations are possible (for example, genotyping errors or distorted inheritance), and the evidence is close to the cutoff, so this should be checked in a larger sample (more litters) before it is accepted." else "The data do not provide sufficient evidence that the genotype ratio departs from 1 : 2 : 1. This does not show that the knockout has no effect on survival; the study may have been too small to detect a modest departure."` *Part B:* `r if (pearson_tbl$p.value < alpha) paste0("The data provide evidence that pretreatment with the drug ", if (rd_hat < 0) "reduces" else "increases", " the chance of a seizure: the seizure rate was ", if (rd_hat < 0) "lower" else "higher", " after the drug than after vehicle, by a small-to-medium amount.") else "The data do not provide sufficient evidence that the drug changes the chance of a seizure. This does not show that it has no effect; the study may have been too small to detect a modest one."` The confidence intervals are wide in both parts, so the sizes of the effects are estimated imprecisely.
 
 ::: {.callout-warning}
 ## Re-read the interpretation if your data change
-The numbers and the significant/not-significant wording above update automatically, but the *scientific interpretation* does not. If you change the data or the analysis, re-read this section and revise it in your own words.
+The numbers (and any wording tied to them with inline R code) update automatically, but the *scientific interpretation* does not. Neither do hand-written sentences elsewhere in this notebook that describe a particular figure or table, or the figure descriptions (alt text). If you change the data or the analysis, re-read the conclusions, the limitations, and those descriptions, and revise them in your own words.
 :::
 
 **Limitations.**

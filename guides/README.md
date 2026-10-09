@@ -11,4 +11,4 @@ Two companion documents that sit *beside* the analysis projects. Neither needs a
 
 Orange boxes in the decision-guide flowchart (paired t-test, repeated-measures designs, rank-based tests) do not yet have a template project; the guide gives the R functions to use.
 
-These files install three small packages if they are missing (`tibble`, `knitr`, `kableExtra`; the plan template also uses `pwr`).
+These files install a few small packages if they are missing (`tibble`, `knitr`, and `kableExtra`; the plan template also uses `dplyr` and `pwr`).

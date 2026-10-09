@@ -21,8 +21,8 @@
 #   the sample to 120 pups and applied the same rule again. The result was still
 #   close to the cutoff, p = .049, and we kept it on purpose: the notebook uses
 #   it to teach why p-values near .05 deserve caution.) Choosing a seed and a
-#   sample size after seeing results is a form of selection, so we disclose it here; a real experiment gets one sample and
-#   no chance to choose.
+#   sample size after seeing results is a form of selection, so we disclose it
+#   here; a real experiment gets one sample and no chance to choose.
 #
 # YOU DO NOT NEED TO RUN THIS FILE to do the analysis. The data already exist in
 # Data/. Running it again re-creates identical files because the seed is set

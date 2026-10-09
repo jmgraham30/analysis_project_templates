@@ -45,9 +45,10 @@ The examples (in gray) use a made-up experiment about a drug and locomotor activ
 ```{r}
 #| label: setup
 # Small, self-contained setup: these packages are installed if missing.
-for (p in c("tibble", "pwr", "knitr", "kableExtra")) {
+for (p in c("dplyr", "tibble", "pwr", "knitr", "kableExtra")) {
   if (!requireNamespace(p, quietly = TRUE)) install.packages(p, repos = "https://cloud.r-project.org")
 }
+library(dplyr)
 library(tibble)
 library(pwr)
 library(knitr)
@@ -110,7 +111,11 @@ Describe how animals (or participants) will be assigned and measured. Be specifi
 | **Independent unit (one "n")** | [For example: one mouse]{.fillin} |
 | **Number of groups** | [ ]{.fillin} |
 | **How animals are assigned to groups** (random assignment? how?) | [For example: random number list]{.fillin} |
+| **Randomization details** (how the sequence is generated, by whom, and how it is kept hidden from the person assigning animals) | [ ]{.fillin} |
 | **Blinding** (who knows the group labels, and when?) | [ ]{.fillin} |
+| **Biological sex and other biological variables** (which are included, balanced, or analyzed, and why) | [ ]{.fillin} |
+| **Biological vs. technical replicates** (what is an independent animal, and what are repeated measures of the same animal?) | [ ]{.fillin} |
+| **Ethics approval** (animal-care or human-subjects protocol number, and date) | [ ]{.fillin} |
 | **Controls** | [For example: saline vehicle, same injection volume and timing]{.fillin} |
 | **Repeated measurements within an animal?** How handled (average first, paired test, repeated-measures)? | [ ]{.fillin} |
 | **Possible confounds and how you will limit them** (time of day, sex, cage, litter, experimenter) | [ ]{.fillin} |
@@ -138,19 +143,21 @@ tribble(
 **Power** is the probability that your study will detect an effect of a given size if it is real. Too few animals and you are likely to miss a real effect (Type II error); the animals you do use are then wasted. Choose the **smallest effect you would consider scientifically meaningful**, or take an estimate from a pilot study or the published literature (published effects from small studies tend to be exaggerated, so be conservative). Then calculate how many animals you need. Do **not** calculate "power" from the effect you observed after the study; it adds no information.
 :::
 
-Edit the settings in the chunk below to match your design, then render. **The values shown are only an example.**
+Edit the settings in the chunk below to match your design, then render. **The values shown are only an example.** Notes: for a **paired** design the effect size is $d_z$, the mean of the within-animal differences divided by the SD of those differences; the ANOVA option is for a **one-way** design (for a 2 × 2 design see `power_2x2()` in the `twoway_anova` project); and the tail setting applies to t-tests and correlations only.
 
 ```{r}
 #| label: power-settings
 # ---- EDIT THESE SETTINGS --------------------------------------------------
 test_type   <- "two_sample_t"  # "one_sample_t", "two_sample_t", "paired_t",
                                # "anova" (one-way), "correlation", or "chisq"
-effect      <- 0.8             # the effect size you want to detect:
+effect      <- 0.5             # the effect size you want to detect (use the SMALLEST effect that matters):
                                #   t-tests: Cohen's d   (small 0.2, medium 0.5, large 0.8)
                                #   anova:   Cohen's f   (small 0.1, medium 0.25, large 0.4)
                                #   correlation: r       (small 0.1, medium 0.3, large 0.5)
                                #   chisq:   Cohen's w   (small 0.1, medium 0.3, large 0.5)
 alpha       <- 0.05            # Type I error rate
+alternative <- "two.sided"     # "two.sided" (default) or "greater" / "less" for a
+                               # one-tailed test (t-tests and correlation only; match Section 3)
 power_goal  <- 0.80            # desired power (1 - Type II error rate)
 k_groups    <- 3               # number of groups (one-way ANOVA only)
 chisq_df    <- 1               # degrees of freedom (chi-square only)
@@ -162,11 +169,11 @@ attrition   <- 0.10            # fraction you expect to lose (illness, exclusion
 # paired designs; animals for one-sample and correlation; total N for chi-square)
 n_needed <- function(es) {
   switch(test_type,
-    one_sample_t = pwr.t.test(d = es, sig.level = alpha, power = power_goal, type = "one.sample")$n,
-    two_sample_t = pwr.t.test(d = es, sig.level = alpha, power = power_goal, type = "two.sample")$n,
-    paired_t     = pwr.t.test(d = es, sig.level = alpha, power = power_goal, type = "paired")$n,
+    one_sample_t = pwr.t.test(d = es, sig.level = alpha, power = power_goal, type = "one.sample", alternative = alternative)$n,
+    two_sample_t = pwr.t.test(d = es, sig.level = alpha, power = power_goal, type = "two.sample", alternative = alternative)$n,
+    paired_t     = pwr.t.test(d = es, sig.level = alpha, power = power_goal, type = "paired", alternative = alternative)$n,
     anova        = pwr.anova.test(k = k_groups, f = es, sig.level = alpha, power = power_goal)$n,
-    correlation  = pwr.r.test(r = es, sig.level = alpha, power = power_goal)$n,
+    correlation  = pwr.r.test(r = es, sig.level = alpha, power = power_goal, alternative = alternative)$n,
     chisq        = pwr.chisq.test(w = es, df = chisq_df, sig.level = alpha, power = power_goal)$N,
     stop("Unknown test_type"))
 }
@@ -174,11 +181,11 @@ n_needed <- function(es) {
 # Smallest effect detectable with power_goal if you can only use n_available
 min_effect <- function(n) {
   switch(test_type,
-    one_sample_t = pwr.t.test(n = n, sig.level = alpha, power = power_goal, type = "one.sample")$d,
-    two_sample_t = pwr.t.test(n = n, sig.level = alpha, power = power_goal, type = "two.sample")$d,
-    paired_t     = pwr.t.test(n = n, sig.level = alpha, power = power_goal, type = "paired")$d,
+    one_sample_t = pwr.t.test(n = n, sig.level = alpha, power = power_goal, type = "one.sample", alternative = alternative)$d,
+    two_sample_t = pwr.t.test(n = n, sig.level = alpha, power = power_goal, type = "two.sample", alternative = alternative)$d,
+    paired_t     = pwr.t.test(n = n, sig.level = alpha, power = power_goal, type = "paired", alternative = alternative)$d,
     anova        = pwr.anova.test(k = k_groups, n = n, sig.level = alpha, power = power_goal)$f,
-    correlation  = pwr.r.test(n = n, sig.level = alpha, power = power_goal)$r,
+    correlation  = pwr.r.test(n = n, sig.level = alpha, power = power_goal, alternative = alternative)$r,
     chisq        = pwr.chisq.test(N = n, df = chisq_df, sig.level = alpha, power = power_goal)$w,
     stop("Unknown test_type"))
 }
@@ -186,11 +193,11 @@ min_effect <- function(n) {
 # Power you would have with n_available animals for your chosen effect size
 power_at <- function(n, es) {
   switch(test_type,
-    one_sample_t = pwr.t.test(n = n, d = es, sig.level = alpha, type = "one.sample")$power,
-    two_sample_t = pwr.t.test(n = n, d = es, sig.level = alpha, type = "two.sample")$power,
-    paired_t     = pwr.t.test(n = n, d = es, sig.level = alpha, type = "paired")$power,
+    one_sample_t = pwr.t.test(n = n, d = es, sig.level = alpha, type = "one.sample", alternative = alternative)$power,
+    two_sample_t = pwr.t.test(n = n, d = es, sig.level = alpha, type = "two.sample", alternative = alternative)$power,
+    paired_t     = pwr.t.test(n = n, d = es, sig.level = alpha, type = "paired", alternative = alternative)$power,
     anova        = pwr.anova.test(k = k_groups, n = n, f = es, sig.level = alpha)$power,
-    correlation  = pwr.r.test(n = n, r = es, sig.level = alpha)$power,
+    correlation  = pwr.r.test(n = n, r = es, sig.level = alpha, alternative = alternative)$power,
     chisq        = pwr.chisq.test(N = n, w = es, df = chisq_df, sig.level = alpha)$power,
     stop("Unknown test_type"))
 }
@@ -198,7 +205,7 @@ power_at <- function(n, es) {
 unit_label <- switch(test_type,
   one_sample_t = "animals", two_sample_t = "animals per group", paired_t = "pairs (animals measured twice)",
   anova = "animals per group", correlation = "animals", chisq = "observations in total")
-es_label   <- switch(test_type, one_sample_t = , two_sample_t = , paired_t = "Cohen's d",
+es_label   <- switch(test_type, one_sample_t = , two_sample_t = "Cohen's d", paired_t = "Cohen's d (of the within-animal differences)",
                      anova = "Cohen's f", correlation = "r", chisq = "Cohen's w")
 
 n_calc    <- ceiling(n_needed(effect))
@@ -214,20 +221,22 @@ benchmarks <- switch(test_type,
   one_sample_t = , two_sample_t = , paired_t = c(0.2, 0.5, 0.8),
   anova = c(0.1, 0.25, 0.4), correlation = c(0.1, 0.3, 0.5), chisq = c(0.1, 0.3, 0.5))
 tibble(Size = c("Small", "Medium", "Large"), es = benchmarks) |>
-  dplyr::mutate(n = vapply(es, function(e) ceiling(n_needed(e)), numeric(1))) |>
-  dplyr::transmute(`Effect size` = Size,
+  mutate(n = vapply(es, function(e) ceiling(n_needed(e)), numeric(1))) |>
+  transmute(`Effect size` = Size,
                    !!es_label := formatC(es, format = "f", digits = 2),
                    !!paste("Needed:", unit_label) := n) |>
   plan_table(align = "lcc")
 ```
 
-**Calculation for my study.** For a **`r es_label` of `r effect`** (two-tailed α = `r alpha`, power = `r 100 * power_goal`%), I need **`r n_calc` `r unit_label`**. Allowing for an expected loss of `r round(100 * attrition)`%, I will plan to start with **`r n_enroll` `r unit_label`**.
+**Calculation for my study.** For a **`r es_label` of `r effect`** (`r if (alternative == "two.sided") "two-tailed" else "one-tailed"` α = `r sub("^0", "", alpha)`, power = `r 100 * power_goal`%), I need **`r n_calc` `r unit_label`**. Allowing for an expected loss of `r round(100 * attrition)`%, I will plan to start with **`r n_enroll` `r unit_label`**.
 
 **What my realistic sample can detect.** If I can only use **`r n_available` `r unit_label`**, my study has **`r round(100 * pow_avail)`% power** for a `r es_label` of `r effect`, and the smallest effect I can detect with `r 100 * power_goal`% power is a `r es_label` of about **`r formatC(min_det, format = "f", digits = 2)`**. `r if (n_available >= n_calc) "My available sample is large enough for the effect I chose." else "My available sample is **smaller** than the calculation requires. If I find no significant effect, I will not conclude that there is none; I will report the effect size and confidence interval and say that the study could only detect large effects."`
 
 **Where my effect size came from and why it is reasonable.** [Smallest meaningful difference, pilot data, or published studies? Explain.]{.fillin}
 
 **Practical limits on sample size** (animals available, cost, time, ethics approval). [ ]{.fillin}
+
+**Stopping rule.** [For example: the sample size is fixed in advance. I will not add animals or stop early after looking at the results, because that inflates the false-positive rate.]{.fillin}
 
 # Data handling {#sec-data}
 
@@ -260,7 +269,7 @@ Name the **primary test** (use the Decision Guide), the assumptions it needs and
 | **Effect size and confidence interval** | [For example: Cohen's d with 95% CI; mean difference with 95% CI]{.fillin} |
 | **Post hoc or multiple comparisons** (if 3+ groups or several outcomes) | [For example: Tukey HSD for all pairs; Holm correction across secondary outcomes]{.fillin} |
 | **Covariates** (if any) | [ ]{.fillin} |
-| **Secondary outcomes** (labeled as secondary) | [ ]{.fillin} |
+| **Secondary outcomes** (labeled as secondary) and **what happens if I have more than one primary outcome** (for example, adjust with Holm) | [ ]{.fillin} |
 | **Exploratory analyses** (labeled as exploratory) | [ ]{.fillin} |
 | **Software** | [R version, packages (for example, tidyverse, effectsize, pwr)]{.fillin} |
 
@@ -280,7 +289,7 @@ Sketch what your main figure and table will show **before** you have data: what 
 Decide in advance how you will read the result. Statistical significance is not the same as importance, and a non-significant result is not proof of no effect.
 :::
 
-- **What result would support my hypothesis?** [For example: a significant increase in distance in the drug group, with a confidence interval that excludes zero and an effect of at least the size I planned to detect.]{.fillin}
+- **What result would support my hypothesis?** [For example: a significant increase in distance in the drug group, with a confidence interval that excludes zero and lies mostly above the smallest effect I care about.]{.fillin}
 - **What result would not support it?** [ ]{.fillin}
 - **How will I interpret a non-significant result?** [For example: as inconclusive if the confidence interval includes both zero and effects I would consider meaningful.]{.fillin}
 - **Limits on what I can conclude** (for example, correlational design, one strain, one dose, small n). [ ]{.fillin}
@@ -294,7 +303,8 @@ Decide in advance how you will read the result. Statistical significance is not 
 - [ ] Exclusion, missing-data, and outlier rules are written down.
 - [ ] My primary analysis, assumption checks, and plan B are chosen.
 - [ ] I have a plan for effect sizes, confidence intervals, and multiple comparisons.
-- [ ] My instructor has reviewed this plan, and I saved a dated copy.
+- [ ] My ethics approval number is recorded.
+- [ ] My instructor has reviewed this plan, and I saved a dated copy (a time-stamped copy, or a registration such as the Open Science Framework, shows that the plan came before the data).
 
 # Deviations log {#sec-deviations}
 

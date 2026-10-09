@@ -116,6 +116,11 @@ Sixty adult mice (30 female, 30 male; 8 to 20 weeks old) were housed individuall
 We did not randomly assign mice to run different distances; each mouse chose how much to run. This is an **observational** (correlational) design with respect to running distance, which limits what we can conclude about cause and effect (@sec-conclusions).
 :::
 
+::: {.callout-note}
+## A note on how these data were chosen
+Because these data are simulated, we could choose the random seed. We used a rule set in advance: take the first seed whose sample correlation is close to the true population correlation and whose random errors are not noticeably non-normal (see `R/01_simulate_data.R`). The sample is therefore tidier than a typical single experiment: its confidence interval and residuals look better than many real samples would, as @sec-sim shows. A real study gets one sample and no chance to choose.
+:::
+
 ## Data description {#sec-data}
 
 The raw data are stored in `Data/neurogenesis_running.csv` (one row per mouse). The raw file is **never edited by hand**: all calculations are done in code so they are documented and repeatable.
@@ -164,7 +169,7 @@ The file has `r n_mice` mice, with no missing or impossible values, so all `r n_
 - **Descriptive statistics and graphs first.** Always plot the two variables against each other *before* computing a correlation. The correlation coefficient describes only straight-line relationships, and it is easy to fool.
 - **Correlation.** The **Pearson correlation coefficient**, with a 95% confidence interval and a two-tailed test of $H_0: \rho = 0$:
 $$r = \frac{\sum (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum (x_i - \bar{x})^2 \, \sum (y_i - \bar{y})^2}}.$$
-It ranges from $-1$ (perfect negative line) through $0$ (no linear relationship) to $+1$ (perfect positive line). Its square, $r^2$, is the proportion of variability in one variable that is shared with the other. By convention, $|r|$ of .10, .30, and .50 are small, medium, and large effects (Cohen, 1988), but these benchmarks should be interpreted in context. The rank-based **Spearman** and **Kendall** correlations serve as checks.
+It ranges from $-1$ (perfect negative line) through $0$ (no linear relationship) to $+1$ (perfect positive line). Its square, $r^2$, is the proportion of variability in one variable that is shared with the other. By convention, $|r|$ of .10, .30, and .50 are small, medium, and large effects (Cohen, 1988), but these benchmarks should be interpreted in context. The test and the confidence interval for $r$ assume that the pairs of values are roughly bivariate normal, with independent mice. The rank-based **Spearman** and **Kendall** correlations serve as checks.
 - **Simple linear regression.** The model
 $$\text{DCX}_i = \beta_0 + \beta_1 \, \text{km}_i + \varepsilon_i, \qquad \varepsilon_i \sim N(0, \sigma^2),$$
 fit by **least squares**. The slope $\beta_1$ is the expected change in DCX+ cells for each additional km per night; the intercept $\beta_0$ is the expected count at 0 km.
@@ -306,7 +311,7 @@ bind_rows(pearson, spearman, kendall) |>
   pub_table(align = "lcccc")
 ```
 
-The Pearson correlation is **$r$ = `r fmt_apa(r_obs, 2)`**, 95% CI [`r fmt_apa(r_lo, 2)`, `r fmt_apa(r_hi, 2)`], `r fmt_p(p_r, md = TRUE)`: a **`r r_label`** positive correlation. We `r if (p_r < alpha) "reject" else "fail to reject"` $H_0: \rho = 0$. The squared correlation is $r^2$ = `r fmt_apa(r2_obs, 2)`, meaning that about **`r fmt_num(100 * r2_obs, 0)`%** of the variability in DCX+ cell counts is shared with (statistically "explained by") running distance, and the remaining `r fmt_num(100 * (1 - r2_obs), 0)`% is due to everything else. The Spearman (rank-based) correlation, `r fmt_apa(spearman$r, 2)`, is `r if (abs(spearman$r - r_obs) < 0.1) "very close to" else "noticeably different from"` the Pearson value, as expected when the relationship is linear and there are no outliers.
+The Pearson correlation is **$r$ = `r fmt_apa(r_obs, 2)`**, 95% CI [`r fmt_apa(r_lo, 2)`, `r fmt_apa(r_hi, 2)`], `r fmt_p(p_r, md = TRUE)`: a **`r r_label`** positive correlation. We `r if (p_r < alpha) "reject" else "fail to reject"` $H_0: \rho = 0$. The squared correlation is $r^2$ = `r fmt_apa(r2_obs, 2)`, meaning that about **`r fmt_num(100 * r2_obs, 0)`%** of the variability in DCX+ cell counts is shared with (statistically "explained by") running distance, and the remaining `r fmt_num(100 * (1 - r2_obs), 0)`% is not shared with running distance (it reflects other variables and measurement noise). The Spearman (rank-based) correlation, `r fmt_apa(spearman$r, 2)`, is `r if (abs(spearman$r - r_obs) < 0.1) "very close to" else "noticeably different from"` the Pearson value, as expected when the relationship is linear and there are no outliers.
 
 ::: {.callout-tip}
 ## What the confidence interval tells you
@@ -365,7 +370,7 @@ grid <- tibble(wheel_km = seq(min(neuro$wheel_km), max(neuro$wheel_km), length.o
 bands <- bind_cols(
   grid,
   predict(fit1, grid, interval = "confidence", level = conf_level) |> as_tibble() |>
-    rename(ci_lwr = lwr, ci_upr = upr),
+    rename(ci_lwr = lwr, ci_upr = upr),   # keeps the fitted values in the column `fit`
   predict(fit1, grid, interval = "prediction", level = conf_level) |> as_tibble() |>
     select(pi_lwr = lwr, pi_upr = upr)
 )
@@ -379,7 +384,7 @@ label_txt <- paste0("r = ", fmt_apa(r_obs, 2), ",  R² = ", fmt_apa(r2_fit, 2), 
 ggplot(neuro, aes(wheel_km, dcx_cells)) +
   geom_ribbon(data = bands, aes(y = NULL, ymin = pi_lwr, ymax = pi_upr), fill = pal[["sky"]], alpha = 0.18) +
   geom_ribbon(data = bands, aes(y = NULL, ymin = ci_lwr, ymax = ci_upr), fill = pal[["blue"]], alpha = 0.35) +
-  geom_line(data = bands, aes(y = ci_lwr + (ci_upr - ci_lwr) / 2), color = pal[["blue"]], linewidth = 1) +
+  geom_line(data = bands, aes(y = fit), color = pal[["blue"]], linewidth = 1) +
   geom_point(size = 2.2, color = "gray20", alpha = 0.85) +
   annotate("text", x = min(neuro$wheel_km), y = max(bands$pi_upr), label = label_txt,
            hjust = 0, vjust = 1, size = 3.8) +
@@ -459,7 +464,7 @@ d_d <- ggplot(aug, aes(seq_along(.cooksd), .cooksd)) +
 ```
 
 - **Linearity and constant variance (A, C).** The residuals form an even band around zero with no curve and no funnel shape, so a straight line fits and the spread is similar for all fitted values.
-- **Normality (B).** The residuals follow the reference line closely. The Shapiro–Wilk test agrees (*W* = `r fmt_num(shap$statistic, 3)`, `r fmt_p(shap$p.value, md = TRUE)`), but remember that a non-significant test is not proof of normality, and with large samples tiny departures become "significant". Look at the plot first.
+- **Normality (B).** The residuals follow the reference line closely. The Shapiro–Wilk test agrees (*W* = `r fmt_apa(shap$statistic, 3)`, `r fmt_p(shap$p.value, md = TRUE)`), but remember that a non-significant test is not proof of normality, and with large samples tiny departures become "significant". Look at the plot first.
 - **Influence (D).** Cook's distance measures how much the fitted line would change if one mouse were removed. A common flag is $4/n$ = `r fmt_num(cook_cut, 3)`. `r nrow(flagged)` mice exceed it (the largest Cook's distance is `r fmt_num(max_cook, 2)`; values near 1 would be a concern), so no single mouse drives the result.
 - **Independence.** This comes from the design, not from a plot: each row is a different mouse, housed individually, and no mouse influences another.
 
@@ -518,12 +523,13 @@ uniq_age   <- r2_full - r2_fit
 #| label: tbl-coef2
 #| tbl-cap: "Multiple regression: DCX+ cells predicted from running distance and age"
 coef2 |>
-  left_join(std2 |> select(term = Parameter, Beta = Std_Coefficient), by = "term") |>
+  left_join(std2 |> select(term = Parameter, Beta = Std_Coefficient, Beta_lo = CI_low, Beta_hi = CI_high), by = "term") |>
   transmute(Term = recode(term, `(Intercept)` = "Intercept", wheel_km = "Running distance (per km)", age_weeks = "Age (per week)"),
             Estimate = fmt_num(estimate, 2), SE = fmt_num(std.error, 2),
             `95% CI` = paste0("[", fmt_num(conf.low, 1), ", ", fmt_num(conf.high, 1), "]"),
             t = fmt_num(statistic, 2), p = fmt_p_col(p.value),
-            `Std. β` = if_else(term == "(Intercept)", "—", fmt_num(Beta, 2))) |>
+            `Std. β [95% CI]` = if_else(term == "(Intercept)", "—",
+              paste0(fmt_num(Beta, 2), " [", fmt_num(Beta_lo, 2), ", ", fmt_num(Beta_hi, 2), "]"))) |>
   pub_table(align = "lrrcrrr")
 ```
 
@@ -545,7 +551,7 @@ tibble(
 ```
 
 - **Age matters.** Holding running distance constant, each additional week of age was associated with `r fmt_num(abs(b2_age), 1)` `r if (b2_age < 0) "fewer" else "more"` DCX+ cells (95% CI [`r fmt_num(b2_lo, 1)`, `r fmt_num(b2_hi, 1)`], `r fmt_p(p_age, md = TRUE)`). Adding age improved the model significantly, *F*(1, `r cmp$Res.Df[2]`) = `r fmt_num(F_cmp, 2)`, `r fmt_p(p_cmp, md = TRUE)`, and $R^2$ rose from `r fmt_apa(r2_fit, 2)` to **`r fmt_apa(r2_full, 2)`** (adjusted $R^2$ = `r fmt_apa(r2_adj, 2)`; the adjusted value penalizes extra predictors).
-- **The running effect did not change much** (slope `r fmt_num(b1, 1)` before, `r fmt_num(b1_adj, 1)` after adjusting). That is because running distance and age were `r if (abs(r_wheel_age) < 0.2) "essentially unrelated" else "related"` in these mice ($r$ = `r fmt_apa(r_wheel_age, 2)`), so age could not be a confounder. It did, however, make the running estimate **more precise** (the slope's standard error fell from `r fmt_num(b1_se, 2)` to `r fmt_num(b1_adj_se, 2)`), because age removed variability that was otherwise unexplained noise. In an *observational* study, whether adjustment changes the slope is exactly how we judge confounding.
+- **The running effect did not change much** (slope `r fmt_num(b1, 1)` before, `r fmt_num(b1_adj, 1)` after adjusting). That is because running distance and age were `r if (abs(r_wheel_age) < 0.2) "essentially unrelated" else "related"` in these mice ($r$ = `r fmt_apa(r_wheel_age, 2)`), so age is unlikely to be a confounder here. It did, however, make the running estimate **more precise** (the slope's standard error fell from `r fmt_num(b1_se, 2)` to `r fmt_num(b1_adj_se, 2)`), because age removed variability that was otherwise unexplained noise. In an *observational* study, a large change in the slope after adjustment is a warning sign of confounding by the adjusted variable; judging confounding also requires subject-matter knowledge about what influences both variables.
 - **Which predictor matters more?** The **standardized coefficients** put the predictors on a common scale (change in DCX+ SDs for a 1-SD change in the predictor): running distance, `r fmt_num(beta_wheel, 2)`; age, `r fmt_num(beta_age, 2)`. Running distance uniquely explains `r fmt_num(100 * uniq_wheel, 0)`% of the variability in counts, and age uniquely explains `r fmt_num(100 * uniq_age, 0)`%.
 
 ```{r}
@@ -780,7 +786,7 @@ Below is how the results would be written in the Results section of a report. Th
 ::: {.callout-note icon=false appearance="simple"}
 ### Results
 
-Data from `r n_mice` mice (`r n_f` female, `r n_m` male) were analyzed; none had missing data. Inspection of the scatterplot and residual plots showed a linear relationship with approximately normal residuals of constant variance and no influential observations (largest Cook's *D* = `r fmt_num(max_cook, 2)`). Running distance (*M* = `r fmt_num(mean(neuro$wheel_km), 1)` km per night, *SD* = `r fmt_num(sd(neuro$wheel_km), 1)`) was `r if (p_r < alpha) "significantly" else "not significantly"` correlated with the number of DCX+ cells in the dentate gyrus (*M* = `r fmt_num(mean(neuro$dcx_cells), 0)`, *SD* = `r fmt_num(sd(neuro$dcx_cells), 0)`), *r*(`r n_mice - 2`) = `r fmt_apa(r_obs, 2)`, 95% CI [`r fmt_apa(r_lo, 2)`, `r fmt_apa(r_hi, 2)`], `r fmt_p(p_r, md = TRUE)`, a `r r_label` effect; running distance accounted for `r fmt_num(100 * r2_fit, 0)`% of the variance in cell counts. In a simple linear regression, each additional kilometer run per night was associated with `r fmt_num(b1, 1)` additional DCX+ cells (*b* = `r fmt_num(b1, 1)`, 95% CI [`r fmt_num(b1_lo, 1)`, `r fmt_num(b1_hi, 1)`], *t*(`r df_res`) = `r fmt_num(t_b1, 2)`, `r fmt_p(p_b1, md = TRUE)`; bootstrap 95% CI [`r fmt_num(boot_ci[1], 1)`, `r fmt_num(boot_ci[2], 1)`]; @fig-main). When age was added to the model, it was a significant negative predictor (*b* = `r fmt_num(b2_age, 1)` cells per week, 95% CI [`r fmt_num(b2_lo, 1)`, `r fmt_num(b2_hi, 1)`], `r fmt_p(p_age, md = TRUE)`) and increased the explained variance from `r fmt_num(100 * r2_fit, 0)`% to `r fmt_num(100 * r2_full, 0)`% (*F*(1, `r cmp$Res.Df[2]`) = `r fmt_num(F_cmp, 2)`, `r fmt_p(p_cmp, md = TRUE)`), whereas the slope for running distance was essentially unchanged (*b* = `r fmt_num(b1_adj, 1)`, @tbl-coef2).
+Data from `r n_mice` mice (`r n_f` female, `r n_m` male) were analyzed; none had missing data. Inspection of the scatterplot and residual plots showed a linear relationship with approximately normal residuals of constant variance and no observations with a large Cook's distance (largest *D* = `r fmt_num(max_cook, 2)`). Running distance (*M* = `r fmt_num(mean(neuro$wheel_km), 1)` km per night, *SD* = `r fmt_num(sd(neuro$wheel_km), 1)`) was `r if (p_r < alpha) "significantly" else "not significantly"` correlated with the number of DCX+ cells in the dentate gyrus (*M* = `r fmt_num(mean(neuro$dcx_cells), 0)`, *SD* = `r fmt_num(sd(neuro$dcx_cells), 0)`), *r*(`r n_mice - 2`) = `r fmt_apa(r_obs, 2)`, 95% CI [`r fmt_apa(r_lo, 2)`, `r fmt_apa(r_hi, 2)`], `r fmt_p(p_r, md = TRUE)`, a `r r_label` effect; running distance accounted for `r fmt_num(100 * r2_fit, 0)`% of the variance in cell counts. In a simple linear regression, each additional kilometer run per night was associated with `r fmt_num(b1, 1)` additional DCX+ cells (*b* = `r fmt_num(b1, 1)`, 95% CI [`r fmt_num(b1_lo, 1)`, `r fmt_num(b1_hi, 1)`], *t*(`r df_res`) = `r fmt_num(t_b1, 2)`, `r fmt_p(p_b1, md = TRUE)`; bootstrap 95% CI [`r fmt_num(boot_ci[1], 1)`, `r fmt_num(boot_ci[2], 1)`]; @fig-main). When age was added to the model, it was a significant negative predictor (*b* = `r fmt_num(b2_age, 1)` cells per week, 95% CI [`r fmt_num(b2_lo, 1)`, `r fmt_num(b2_hi, 1)`], `r fmt_p(p_age, md = TRUE)`) and increased the explained variance from `r fmt_num(100 * r2_fit, 0)`% to `r fmt_num(100 * r2_full, 0)`% (*F*(1, `r cmp$Res.Df[2]`) = `r fmt_num(F_cmp, 2)`, `r fmt_p(p_cmp, md = TRUE)`), whereas the slope for running distance was essentially unchanged (*b* = `r fmt_num(b1_adj, 1)`, @tbl-coef2).
 :::
 
 Notice what the write-up does: it **states the checks of the assumptions**, gives the **sample size**, the **correlation with its degrees of freedom, confidence interval, and *p*-value**, reports the **slope in the original units** (cells per km, which is more informative than the *p*-value alone), reports **$R^2$**, and refers to the figures and tables. It does not say that running *causes* more neurogenesis.
@@ -791,7 +797,7 @@ Notice what the write-up does: it **states the checks of the assumptions**, give
 
 ::: {.callout-warning}
 ## Re-read the interpretation if your data change
-The numbers and the reject/fail-to-reject wording above update automatically, but the *scientific interpretation* does not. If you change the data or the analysis, re-read this section and revise it in your own words.
+The numbers (and any wording tied to them with inline R code) update automatically, but the *scientific interpretation* does not. Neither do hand-written sentences elsewhere in this notebook that describe a particular figure or table, or the figure descriptions (alt text). If you change the data or the analysis, re-read the conclusions, the limitations, and those descriptions, and revise them in your own words.
 :::
 
 **Limitations.**

@@ -375,7 +375,8 @@ print(wilcox)
 result_sentence <- paste0(
   "Control mice (n = ", n1, ", M = ", fmt_num(desc$mean[1]), ", SD = ",
   fmt_num(desc$sd[1]), ") spent ",
-  ifelse(p_value < alpha, "significantly more", "not significantly more"),
+  ifelse(p_value < alpha, "significantly ", "not significantly "),
+  ifelse(mean_diff > 0, "more", "less"),
   " time in the open arms than stressed mice (n = ", n2, ", M = ",
   fmt_num(desc$mean[2]), ", SD = ", fmt_num(desc$sd[2]), "), Welch's t(",
   fmt_num(t_df), ") = ", fmt_num(t_value), ", ", fmt_p(p_value),

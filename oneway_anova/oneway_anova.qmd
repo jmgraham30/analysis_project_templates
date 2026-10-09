@@ -185,8 +185,8 @@ The final data set contains **N = `r N`** mice in **`r k`** groups of **`r n_per
 $$F = \frac{MS_{\text{between}}}{MS_{\text{within}}} = \frac{\text{variability among the group means}}{\text{variability among mice within the same group}},$$
 with $df = (k - 1,\; N - k)$. If the group means differ more than chance variation within groups would produce, $F$ is large.
 - **Assumptions.** (1) Independence: each mouse is in one group and measured once, and mice do not influence each other; (2) the **residuals** (each mouse's distance from its own group mean) are approximately normal; (3) the groups have similar variances ("homogeneity of variance"); (4) no extreme outliers. We check these with a Q-Q plot, a residuals-versus-fitted plot, the Shapiro–Wilk test, Levene's test, and an outlier screen.
-- **Effect size.** **Eta-squared** ($\eta^2$), the proportion of the total variability in distance explained by dose group, with a 90% confidence interval (the convention for F tests); and **omega-squared** ($\omega^2$), a less biased version. By convention, $\eta^2$ of .01, .06, and .14 are small, medium, and large. Cohen's $f$ (.10, .25, .40 for small, medium, large) is used in power analysis.
-- **Post hoc tests.** If, and only if, the omnibus test is significant, we compare all six pairs of groups with **Tukey's HSD** test, which controls the family-wise error rate at $\alpha$ across all six comparisons. We report mean differences with Tukey-adjusted 95% confidence intervals and Cohen's *d* for each pair. As an alternative when only the comparisons with the control matter, we also show **Dunnett's test**.
+- **Effect size.** **Eta-squared** ($\eta^2$), the proportion of the total variability in distance explained by dose group, with a 90% confidence interval (the convention for F tests: because $\eta^2$ cannot be negative and the F test is one-sided, a 90% interval matches a two-sided test at $\alpha = .05$); and **omega-squared** ($\omega^2$), a less biased version. By convention, $\eta^2$ of .01, .06, and .14 are small, medium, and large. Cohen's $f$ (.10, .25, .40 for small, medium, large) is used in power analysis.
+- **Post hoc tests.** As a course convention, only if the omnibus test is significant, we compare all six pairs of groups with **Tukey's HSD** test, which controls the family-wise error rate at $\alpha$ across all six comparisons. We report mean differences with Tukey-adjusted 95% confidence intervals and Cohen's *d* for each pair. As an alternative when only the comparisons with the control matter, we also show **Dunnett's test**.
 - **Robustness checks.** Welch's ANOVA (does not assume equal variances), the Games–Howell post hoc test, and the Kruskal–Wallis test (does not assume normality).
 - **Software.** Analyses were run in `r R.version.string` using the tidyverse, `broom`, `rstatix`, `emmeans`, `effectsize`, and `pwr`.
 
@@ -334,17 +334,17 @@ anova_tbl |>
   transmute(
     Source = if_else(term == "dose_group", "Dose group (between)", "Residuals (within)"),
     df,
-    `Sum of squares` = sumsq,
-    `Mean square`    = meansq,
-    F = statistic,
-    p = fmt_p_col(p.value)
+    `Sum of squares` = fmt_num(sumsq, 1),
+    `Mean square`    = fmt_num(meansq, 1),
+    F = if_else(is.na(statistic), "", fmt_num(statistic, 2)),
+    p = if_else(is.na(p.value), "", fmt_p_col(p.value))
   ) |>
-  pub_table(digits = 2, align = "lccccc")
+  pub_table(align = "lccccc")
 ```
 
 The F statistic compares the variability **between** group means (mean square = `r fmt_num(anova_tbl$meansq[1], 1)`) with the variability **within** groups (mean square = `r fmt_num(anova_tbl$meansq[2], 1)`). Their ratio is *F*(`r df1`, `r df2`) = `r fmt_num(F_value)`, `r fmt_p(p_anova, md = TRUE)`.
 
-**Decision rule.** If $p < \alpha$, we reject $H_0$. Here $p$ is `r if (p_anova < alpha) "less" else "not less"` than $\alpha$ = `r alpha`, so we **`r if (p_anova < alpha) "reject" else "fail to reject"` $H_0$**: `r if (p_anova < alpha) "the data are not consistent with all four population means being equal." else "we do not have evidence that the population means differ, and we should not run post hoc tests."`
+**Decision rule.** If $p < \alpha$, we reject $H_0$. Here $p$ is `r if (p_anova < alpha) "less" else "not less"` than $\alpha$ = `r fmt_apa(alpha)`, so we **`r if (p_anova < alpha) "reject" else "fail to reject"` $H_0$**: `r if (p_anova < alpha) "the data are not consistent with all four population means being equal." else "we do not have evidence that the population means differ, and we should not run post hoc tests."`
 
 ::: {.callout-important}
 ## What a p-value is (and is not)
@@ -519,7 +519,7 @@ Error rates are long-run properties: they describe what would happen if we repea
 
 1. **$H_0$ is true.** All four groups have the same population mean.
 2. **$H_1$ is true, with a medium effect** ($f = 0.25$).
-3. **$H_1$ is true, with a large effect** ($f = 0.56$, similar to our data).
+3. **$H_1$ is true, with a large effect** ($f = 0.56$, the true value used to create our data).
 
 In each simulated experiment we record the omnibus ANOVA p-value, and also the *smallest* of the six pairwise p-values, both unadjusted and Tukey-adjusted. (For speed, the statistics are computed directly from the group means and the pooled within-group variance, which is exactly what ANOVA and Tukey's test use.)
 
@@ -645,7 +645,7 @@ Forty-eight mice (12 per group) were included in the analysis. A one-way between
 
 ::: {.callout-warning}
 ## Re-read the interpretation if your data change
-The numbers and the significant/not-significant wording above update automatically, but the *scientific interpretation* does not. If you change the data or the analysis, re-read this section and revise it in your own words.
+The numbers (and any wording tied to them with inline R code) update automatically, but the *scientific interpretation* does not. Neither do hand-written sentences elsewhere in this notebook that describe a particular figure or table, or the figure descriptions (alt text). If you change the data or the analysis, re-read the conclusions, the limitations, and those descriptions, and revise them in your own words.
 :::
 
 **Limitations.**
@@ -689,7 +689,7 @@ variable] on [outcome], F(__, __) = __, p = __, eta-squared = __, 90% CI [__, __
 [units], 95% CI [__, __], adjusted p = __. [Describe the other pairs.]
 ```
 
-**If the omnibus test is not significant**, report it and **stop**: running post hoc tests anyway, hoping to find a significant pair, inflates your false-positive rate. Report the effect size with its confidence interval and the sensitivity analysis (what size of effect could the study detect?) so readers can judge what the study could and could not show.
+**If the omnibus test is not significant**, report it and stop (this is the convention we follow). Tukey's and Dunnett's tests control the family-wise error rate on their own, so they do not *require* a significant omnibus test, but hunting through many pairs after a null omnibus result is exploratory and must be labeled that way; and hoping to find a significant pair is a recipe for a false positive. Report the effect size with its confidence interval and the sensitivity analysis (what size of effect could the study detect?) so readers can judge what the study could and could not show.
 
 # Your Turn {#sec-your-turn}
 

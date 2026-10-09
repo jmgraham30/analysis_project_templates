@@ -25,8 +25,11 @@
 
 required_packages <- c("tidyverse", "here", "knitr", "kableExtra", "patchwork")
 
-# Install any package that is not already on this computer (needs internet,
-# and only happens the first time).
+# Install any package that is not already on this computer. This needs an
+# internet connection and only happens the first time. (If you are offline, or
+# the install fails, install the packages above from the Packages pane first.)
+# These projects were written for R 4.1 or newer and a current tidyverse
+# (dplyr 1.1 or newer). If a function is "not found", update your packages.
 missing_packages <- setdiff(required_packages, rownames(installed.packages()))
 if (length(missing_packages) > 0) {
   message("Installing missing packages: ", paste(missing_packages, collapse = ", "))

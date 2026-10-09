@@ -160,7 +160,8 @@ if (p_anova < alpha) {
 # Rough benchmarks (use with care): eta^2 of .01 small, .06 medium, .14 large.
 # Cohen's f is another version used in power analysis: .10 small, .25 medium,
 # .40 large.
-# For eta^2, a 90% CI (not 95%) is conventional because F tests are one-sided.
+# For eta^2, a 90% CI (not 95%) is conventional: eta^2 cannot be negative and the
+# F test is one-sided, so a 90% interval matches a two-sided test at alpha = .05.
 
 eta2   <- eta_squared(fit, ci = 0.90, alternative = "two.sided")
 omega2 <- omega_squared(fit, ci = 0.90, alternative = "two.sided")

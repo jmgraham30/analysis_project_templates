@@ -52,7 +52,7 @@ Distances were simulated from normal distributions with the same standard deviat
 | Medium | 50 |
 | High | 55 |
 
-The true effect is a medium-to-large one (Cohen's *f* of about 0.56; η² of about 0.24). Sex was assigned at random within each group and has **no** effect in the simulation. Values were rounded to 0.1 and kept at or above 0.
+The true effect is a large one (Cohen's *f* of about 0.56; η² of about 0.24). Sex was assigned at random within each group and has **no** effect in the simulation. Values were rounded to 0.1 and kept at or above 0.
 
 **A note on the seed.** A random sample can by chance look quite different from the population it came from. To get a representative teaching example, we used a rule decided before looking at any *p*-values: use the first seed (1, 2, 3, ...) whose sample η² was within 0.04 of the true value. That was seed 1. Choosing a seed is a form of selection, so we disclose it. A real experiment gets only one sample and no chance to choose. The notebook uses simulation to show how often samples like this one, and unlucky ones, occur. See `R/01_simulate_data.R` for the exact code. Re-running it reproduces this same file.
 

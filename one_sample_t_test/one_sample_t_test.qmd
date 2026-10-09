@@ -192,7 +192,7 @@ n_excluded <- nrow(excluded)
 n          <- nrow(nor_clean)
 ```
 
-Of the `r n_recorded` mice recorded, `r n_excluded` (`r paste(excluded$mouse_id, collapse = " and ")`) were excluded because their total exploration time was under `r min_explore` s. The final sample was **N = `r n`**.
+Of the `r n_recorded` mice recorded, `r n_excluded` (`r if (n_excluded > 0) knitr::combine_words(excluded$mouse_id) else "none"`) were excluded because their total exploration time was under `r min_explore` s. The final sample was **N = `r n`**.
 
 # Statistical Analysis {#sec-stats}
 
@@ -204,7 +204,7 @@ where $\bar{x}$ is the sample mean, $s$ the sample standard deviation, and $n$ t
 - **Assumptions.** (1) Each mouse contributes one independent observation; (2) DI is a continuous measure; (3) DI is approximately normally distributed (checked with a histogram, a normal Q-Q plot, and the Shapiro–Wilk test); (4) there are no extreme outliers (|z| > 3).
 - **Effect size.** Cohen's *d* $= (\bar{x} - \mu_0)/s$, with a 95% confidence interval. By convention, 0.2 is small, 0.5 is medium, and 0.8 is large, but these benchmarks should be interpreted in the context of the research question.
 - **Confidence interval.** A 95% confidence interval for the mean DI.
-- **Robustness check.** A Wilcoxon signed-rank test, which does not assume normality.
+- **Robustness check.** A Wilcoxon signed-rank test, a rank-based test that does not assume normality (it does assume that the distribution of DI is roughly symmetric around its center).
 - **Software.** Analyses were run in `r R.version.string` using the tidyverse, `broom`, `effectsize`, and `pwr`.
 
 ## Power and sample size plan {#sec-power-plan}
@@ -223,7 +223,7 @@ sens <- pwr.t.test(n = n, sig.level = alpha, power = target_power,
                    type = "one.sample", alternative = "two.sided")
 ```
 
-To detect a medium effect ($d = 0.5$) with 80% power at $\alpha = .05$, we would need about **`r ceiling(plan$n)` mice** (always round up). With our `r n` mice, the smallest effect we could detect with 80% power is **$d$ = `r fmt_num(sens$d)`**. In other words, this study was somewhat underpowered for a medium effect, which we should keep in mind when interpreting the results.
+To detect a medium effect ($d = 0.5$) with 80% power at $\alpha = .05$, we would need about **`r ceiling(plan$n)` mice** (always round up). With our `r n` mice, the smallest effect we could detect with 80% power is **$d$ = `r fmt_num(sens$d)`**. In other words, this study was somewhat underpowered for a medium effect, which we should keep in mind when interpreting the results. (We chose "medium" here only as a familiar benchmark. In a real plan, the target effect should be the *smallest effect that would matter scientifically*, ideally based on pilot data or the literature.)
 
 # Results and Conclusions {#sec-results}
 
@@ -336,7 +336,7 @@ tt_tidy |>
   pub_table(digits = 2, align = "c")
 ```
 
-**Decision rule.** If $p < \alpha$, we reject $H_0$. Here `r fmt_p(p_value, md = TRUE)`, which is `r if (p_value < alpha) "less" else "not less"` than $\alpha$ = `r alpha`, so we **`r if (p_value < alpha) "reject" else "fail to reject"` $H_0$**.
+**Decision rule.** If $p < \alpha$, we reject $H_0$. Here `r fmt_p(p_value, md = TRUE)`, which is `r if (p_value < alpha) "less" else "not less"` than $\alpha$ = `r fmt_apa(alpha)`, so we **`r if (p_value < alpha) "reject" else "fail to reject"` $H_0$**.
 
 ::: {.callout-important}
 ## What a p-value is (and is not)
@@ -481,7 +481,7 @@ If we are unsure about normality, we can confirm the conclusion with a test that
 wilcox <- wilcox.test(nor_clean$DI, mu = mu0, exact = FALSE) |> tidy()
 ```
 
-The Wilcoxon signed-rank test `r if ((wilcox$p.value < alpha) == (p_value < alpha)) "led to the same conclusion as" else "led to a different conclusion from"` the t-test, *V* = `r wilcox$statistic`, `r fmt_p(wilcox$p.value, md = TRUE)`.
+The Wilcoxon signed-rank test `r if ((wilcox$p.value < alpha) == (p_value < alpha)) "led to the same conclusion as" else "led to a different conclusion from"` the t-test, *V* = `r wilcox$statistic`, `r fmt_p(wilcox$p.value, md = TRUE)`. (The Wilcoxon test ignores any DI that is exactly equal to the null value of 0; with `exact = FALSE`, R then uses a normal approximation, which is fine here.)
 
 ## A second cohort: same experiment, different result {#sec-cohort2}
 
@@ -563,7 +563,7 @@ What this comparison teaches:
 
 - **A single sample is one random draw.** The sample mean, the p-value, and the effect size all vary from sample to sample, even when the experiment, the animals, and the true effect are identical.
 - **"Significant" and "not significant" can come from similar data.** The two confidence intervals overlap substantially. A significant result in one study and a non-significant result in another does not mean the studies *disagree*. The difference between "significant" and "not significant" is not itself necessarily significant.
-- **The confidence intervals tell the real story.** Cohort 2's interval for *d* (`r fmt_num(c2$d_low)` to `r fmt_num(c2$d_high)`) includes 0, but it also includes medium and even large effects, so these data cannot rule out an effect like the true one. The result is "not significant" because the study was underpowered, not because there is no effect. (A 95% interval also misses the true value in about 1 sample in 20. Here, Cohort 2's interval for the mean, [`r fmt_num(c2$ci_low)`, `r fmt_num(c2$ci_high)`], stops just short of the true mean of `r true_mean`.)
+- **The confidence intervals tell the real story.** Cohort 2's interval for *d* (`r fmt_num(c2$d_low)` to `r fmt_num(c2$d_high)`) includes 0, but it also includes small and medium effects, so these data cannot rule out an effect like the true one. The result is "not significant" because the study was underpowered, not because there is no effect. (A 95% interval also misses the true value in about 1 sample in 20. Here, Cohort 2's interval for the mean, [`r fmt_num(c2$ci_low)`, `r fmt_num(c2$ci_high)`], stops just short of the true mean of `r true_mean`.)
 - **Do not interpret a non-significant result as "no effect."** It means this study did not provide enough evidence.
 - **Replication and larger samples matter.** More mice, or combining evidence across studies, reduces the chance of a miss (see @sec-your-turn).
 
@@ -583,7 +583,7 @@ Of the `r n_recorded` mice tested, `r n_excluded` were excluded for exploring th
 
 ::: {.callout-warning}
 ## Re-read the interpretation if your data change
-The numbers and the reject/fail-to-reject wording above update automatically, but the *scientific interpretation* does not. If you change the data or the analysis, re-read this section and revise it in your own words.
+The numbers (and any wording tied to them with inline R code) update automatically, but the *scientific interpretation* does not. Neither do hand-written sentences elsewhere in this notebook that describe a particular figure or table, or the figure descriptions (alt text). If you change the data or the analysis, re-read the conclusions, the limitations, and those descriptions, and revise them in your own words.
 :::
 
 **Limitations.**

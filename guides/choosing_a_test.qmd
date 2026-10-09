@@ -61,7 +61,7 @@ Almost every choice comes from three questions about your **outcome** (the thing
 
 # Step 0: What is one "n"? The unit of analysis {#sec-unit}
 
-Every test in this guide assumes that each data point is an **independent unit**. In neuroscience, the independent unit is almost always the **animal** (or the human participant), *not* the neuron, cell, brain section, or trial.
+Apart from the paired and repeated-measures methods (which work on within-animal differences), every test in this guide assumes that each data point is an **independent unit**. In neuroscience, the independent unit is almost always the **animal** (or the human participant), *not* the neuron, cell, brain section, or trial.
 
 ::: {.callout-warning}
 ## Pseudoreplication
@@ -70,7 +70,7 @@ If you count cells in 4 sections from each of 6 mice, you have **6 independent u
 
 **What to do:**
 
-- **Simplest and safest for a course project:** average (or sum) the repeated measurements *within each animal first*, then analyze one number per animal.
+- **Simplest and safest for a course project:** average (or sum) the repeated measurements *within each animal first*, then analyze one number per animal. (This works best when each animal has about the same number of measurements.)
 - **More advanced:** a *mixed-effects model* (random effect of animal) uses all the measurements correctly. Ask your instructor; it is beyond the templates in this repository.
 - **Repeated measurements of the *same animal under different conditions*** (before/after a drug, left/right hemisphere, days 1 to 5) are not independent either; they need *paired* or *repeated-measures* methods (@sec-table).
 
@@ -79,7 +79,7 @@ If you count cells in 4 sections from each of 6 mice, you have **6 independent u
 | 10 neurons from each of 5 mice | 5 mice |
 | 3 brain sections per mouse, 8 mice per group | 8 mice per group |
 | Each of 12 mice before and after a drug | 12 mice (analyze the 12 *differences*) |
-| 6 pups from each of 4 litters | 4 litters (pups in a litter are not independent) |
+| 6 pups from each of 4 litters | 4 litters, if each whole litter received one treatment (pups in a litter are not independent). If every litter contained pups from both treatments, litter is a *block* and needs a blocked or mixed model. |
 | One measurement from each of 30 mice in 3 groups | 30 mice (10 per group) |
 
 # The decision flowchart {#sec-flow}
@@ -95,12 +95,12 @@ flowchart LR
   U --> B{Outcome type}
   B -->|Numeric measurement| N{What is the question?}
   B -->|Counts in categories| C{How many categorical variables?}
-  B -->|Ordinal or small skewed sample| R[Rank-based alternatives<br/>see the nonparametric table]
+  B -->|Ordinal or small skewed sample| R[Choose the design as for numeric data,<br/>then use the rank-based alternative<br/>see the nonparametric table]
 
   N -->|Compare one mean to a known value| T1[One-sample t-test]
   N -->|Compare two groups| G2{Same animals in both conditions?}
   N -->|Compare three or more groups| G3{Same animals in all conditions?}
-  N -->|Two factors at once| F2[Two-way ANOVA<br/>mixed design if one factor is within-animal]
+  N -->|Two factors at once| F2[Two-way ANOVA<br/>template covers 2 x 2 between-animal designs;<br/>mixed design if one factor is within-animal]
   N -->|Relationship between two numeric variables| REG[Correlation and regression<br/>multiple regression for 2 or more predictors]
 
   G2 -->|No: different animals| T2[Two-sample t-test<br/>Welch]
@@ -139,7 +139,7 @@ tribble(
   "Do two factors (and their <b>interaction</b>) affect the mean?",
     "Two-way ANOVA; simple effects if the interaction matters", "Partial η²", "As for one-way ANOVA; balanced design is best", "<code>aov(y ~ A * B)</code>", "<code>twoway_anova</code>",
   "Does the same animal's measurement change over several times or conditions?",
-    "Repeated-measures ANOVA or a mixed-effects model", "Generalized η²", "Sphericity (or use a mixed model); normal residuals", "<code>rstatix::anova_test(..., within = )</code>; <code>lme4::lmer()</code>", "<i>not yet</i>",
+    "Repeated-measures ANOVA or a mixed-effects model", "Generalized η²", "Sphericity (or use a mixed model); normal residuals", "<code>rstatix::anova_test(d, dv = y, wid = animal, within = condition)</code>; <code>lme4::lmer(y ~ condition + (1 | animal))</code>", "<i>not yet</i>",
   "Are two numeric variables related? Can one predict the other?",
     "Pearson correlation; simple linear regression (multiple regression for 2+ predictors)", "<i>r</i>, <i>R</i>², the slope with its CI", "Linear relationship; independent units; normal, equal-variance residuals", "<code>cor.test()</code>; <code>lm(y ~ x)</code>", "<code>correlation_regression</code>",
   "Do observed counts match expected proportions (one categorical variable)?",
@@ -154,7 +154,7 @@ tribble(
 
 # When the assumptions are doubtful: rank-based alternatives {#sec-nonparametric}
 
-Use these when the outcome is **ordinal**, when the sample is **small and clearly skewed or has extreme outliers**, or as a **robustness check** next to your main analysis. They compare ranks rather than means, so they are less affected by outliers but answer a slightly different question (about the "typical" or median difference, not the mean).
+Use these when the outcome is **ordinal**, when the sample is **small and clearly skewed or has extreme outliers**, or as a **robustness check** next to your main analysis. They compare ranks rather than means, so they are less affected by outliers but answer a slightly different question: whether values in one group *tend to be larger* than values in the other (not whether the means differ). They can be read as a comparison of medians only when the distributions have similar shapes.
 
 ```{r}
 #| label: tbl-nonpar
@@ -165,7 +165,7 @@ tribble(
   "Two-sample t-test",            "Mann–Whitney U (Wilcoxon rank-sum) test",   "<code>wilcox.test(y ~ group)</code>",
   "Paired t-test",                "Wilcoxon signed-rank test on the pairs",    "<code>wilcox.test(after, before, paired = TRUE)</code>",
   "One-way ANOVA",                "Kruskal–Wallis test (Dunn's test afterward)", "<code>kruskal.test(y ~ group)</code>",
-  "Repeated-measures ANOVA",      "Friedman test",                             "<code>friedman.test()</code>",
+  "Repeated-measures ANOVA",      "Friedman test",                             "<code>friedman.test(y ~ condition | animal, data = d)</code>",
   "Pearson correlation",          "Spearman or Kendall correlation",           "<code>cor.test(x, y, method = \"spearman\")</code>",
   "Chi-square (small counts)",    "Fisher's exact test",                       "<code>fisher.test()</code>"
 ) |>
@@ -251,7 +251,7 @@ Try each scenario yourself before opening the answer. Always ask: *what is the i
 # Common mistakes {#sec-mistakes}
 
 1. **Wrong unit of analysis** (cells, sections, or trials treated as animals; @sec-unit).
-2. **Running many t-tests instead of one ANOVA.** Each test has a 5% false-positive chance; across several tests the overall risk climbs (three groups give three comparisons and roughly 14% risk of at least one false positive).
+2. **Running many t-tests instead of one ANOVA.** Each test has a 5% false-positive chance; across several tests the overall risk climbs (three groups give three comparisons and up to about a 14% risk of at least one false positive).
 3. **Ignoring the pairing** (a two-sample test on before/after data) or **imagining a pairing** that does not exist.
 4. **Testing assumptions only with a significance test.** With small samples such tests have little power; with large samples they flag trivial departures. Look at plots.
 5. **Interpreting a non-significant result as "no effect."** Report the effect size and confidence interval, and what your sample size could have detected.

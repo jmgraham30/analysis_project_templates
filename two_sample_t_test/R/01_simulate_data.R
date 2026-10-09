@@ -68,7 +68,7 @@ epm <- bind_rows(
 # test could not be completed. We record this as a missing value (NA), NOT as 0.
 epm <- epm |>
   mutate(across(c(open_arm_pct, total_entries),
-                ~ if_else(mouse_id == "S09", NA, .x)))
+                ~ replace(.x, mouse_id == "S09", NA)))
 
 write_csv(epm, here("Data", "elevated_plus_maze.csv"))
 message("Saved Data/elevated_plus_maze.csv (", nrow(epm), " rows)")

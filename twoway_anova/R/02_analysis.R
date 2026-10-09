@@ -58,9 +58,10 @@ bdnf <- bdnf_raw |>
     cell    = interaction(housing, stress, sep = " / ")   # one label per cell
   )
 
-# Sum-to-zero ("effect") coding. This makes the tests in the ANOVA table correct
-# even if the cells ever have different n (unbalanced designs, "Type III" tests).
-# With equal n per cell, as here, it changes nothing, but it is a good habit.
+# Sum-to-zero ("effect") coding, the usual setup for factorial designs. With equal
+# n per cell, as here, it changes nothing. If the cells ever have different n, you
+# must ALSO request Type III tests (for example car::Anova(fit, type = 3)); aov()
+# alone gives sequential (Type I) tests that depend on the order of the terms.
 options(contrasts = c("contr.sum", "contr.poly"))
 
 n_cell <- unique(count(bdnf, housing, stress)$n)   # 10 (balanced)
@@ -159,7 +160,8 @@ a_inter   <- get_row("housing:stress")
 # the other effects that is explained by this effect. (In a one-way ANOVA it equals
 # plain eta-squared.) Omega-squared is a less biased estimate.
 # Rough benchmarks (use with care): partial eta^2 of .01 small, .06 medium,
-# .14 large. A 90% CI is conventional because F tests are one-sided.
+# .14 large. A 90% CI is conventional: eta^2 cannot be
+# negative and the F test is one-sided, so it matches a two-sided test at alpha = .05.
 
 eta2   <- eta_squared(fit,   partial = TRUE, ci = 0.90, alternative = "two.sided")
 omega2 <- omega_squared(fit, partial = TRUE, ci = 0.90, alternative = "two.sided")
@@ -205,7 +207,8 @@ emmeans(fit, ~ stress)
 # (A) Every mouse, with each cell's mean and 95% CI joined by lines (an
 #     "interaction plot"). Non-parallel lines suggest an interaction.
 # (B) The stress effect (Stress - Control) within each housing condition, with
-#     Holm-adjusted 95% CIs.
+#     Bonferroni-adjusted 95% CIs (emmeans gives Bonferroni intervals whenever
+#     p-values are Holm-adjusted; Holm adjusts the p-values only).
 
 cell_ci <- as_tibble(summary(emm_cells))   # emmean, SE, df, lower.CL, upper.CL
 
@@ -228,7 +231,7 @@ fig_b <- simple_tbl |>
   geom_pointrange(aes(xmin = lower.CL, xmax = upper.CL), size = 0.6, linewidth = 0.9) +
   scale_color_manual(values = unname(pal[c("blue", "vermillion")])) +
   scale_y_discrete(limits = rev) +
-  labs(x = "Effect of stress on BDNF (pg/mg)\nwith Holm-adjusted 95% CI", y = "Housing") +
+  labs(x = "Effect of stress on BDNF (pg/mg)\nwith Bonferroni-adjusted 95% CI", y = "Housing") +
   theme(legend.position = "none")
 
 fig_main <- fig_a + fig_b + plot_layout(widths = c(1.2, 1)) +
