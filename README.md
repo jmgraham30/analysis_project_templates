@@ -11,14 +11,14 @@ Template R projects for an undergraduate **neuroscience research methods** cours
 
 | Project folder | Analysis topic | Status |
 |:--|:--|:--|
-| `data_organization_and_display` | Organization and display of data | Planned |
+| `data_organization_and_display` | Organization and display of data | **Ready for review** |
 | `measures_tendency_variability` | Measures of central tendency and variability | Planned |
 | `correlation_regression` | Correlation and regression | Planned |
 | `one_sample_t_test` | One-sample t-test | **Ready for review** |
 | `two_sample_t_test` | Two-sample t-test | **Ready for review** |
 | `oneway_anova` | One-way analysis of variance | **Ready for review** |
 | `twoway_anova` | Two-way analysis of variance | **Ready for review** |
-| `chisquare_test` | Chi-square test | Planned |
+| `chisquare_test` | Chi-square test | **Ready for review** |
 
 Where appropriate, each project's notebook illustrates **null hypothesis testing** (including Type I and Type II errors), **effect size**, and **power**, and shows how to **write up and present results** in a publication-style format.
 

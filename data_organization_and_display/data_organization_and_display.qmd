@@ -1,25 +1,861 @@
 ---
-title: "Untitled"
-format: html
+title: "From Messy Spreadsheet to Honest Figure: Organizing and Displaying Data"
+subtitle: "Lab notebook template: data organization, cleaning, summary, and display"
+author: "Your Name"
+date: today
+date-format: "MMMM D, YYYY"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: true
+    code-fold: show
+    code-tools: true
+    embed-resources: true
+    smooth-scroll: true
+    fig-width: 6.5
+    fig-height: 4.2
+    fig-dpi: 300
+    fig-align: center
+    tbl-cap-location: top
+execute:
+  echo: true
+  warning: false
+  message: false
 ---
 
-## Quarto
+::: {.callout-note icon=false}
+## How to use this notebook
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+This is a **template lab notebook** that walks through a complete workflow: messy lab files, a data-handling plan, cleaning and tidying in code, summary tables, and figures. To make it yours:
 
-## Running Code
+1. Open `data_organization_and_display.Rproj` first (so RStudio uses this folder as the working directory).
+2. Replace `Your Name` in the header above with your name.
+3. Click **Render** to build the notebook. Every number, table, and figure is regenerated from the raw files and the code.
+4. Read the text, then change things and re-render to see what happens (see @sec-your-turn).
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+The data are **simulated** for teaching purposes. No animals were tested. The problems in the raw files were added on purpose.
+:::
+
+| Notebook details | |
+|:--|:--|
+| **Project** | Organization, cleaning, summary, and display of data (no hypothesis tests) |
+| **Data files** | `Data/open_field_raw.csv` (messy lab spreadsheet), `Data/animals.csv` (animal records) |
+| **Analysis script** | `R/02_analysis.R` (same workflow, with extra teaching comments) |
+| **Helper code** | `R/00_setup.R` (packages, plot theme, formatting helpers) |
+| **Software** | `r R.version.string`; Quarto |
 
 ```{r}
-1 + 1
+#| label: setup
+# Load packages, the plot theme, and helper functions (see R/00_setup.R)
+source("R/00_setup.R")
 ```
 
-You can add options to executable code like this 
+# Goals and Guiding Questions {#sec-problem}
+
+## Background
+
+Every analysis in this course starts the same way: the data arrive in a form that is convenient for the person who collected them (a spreadsheet with merged cells, abbreviations, comments typed into number columns), not for the computer. Before any statistics, we must **organize** the data so that each row, column, and cell means one thing, **check** them for errors, and **look at** them. Researchers often spend more time on these steps than on the statistical test, and mistakes made here are easy to miss and can change the conclusions.
+
+This project works through a realistic example. Forty mice from two genotypes (wild type, **WT**, and a knockout, **KO**) received a **vehicle** injection or a **drug** daily for three weeks. Body weight was recorded at the start and then weekly (weeks 0 to 3), and at the end each mouse was tested for 10 minutes in an **open field** (an empty arena), where the **distance traveled** and the **time spent in the center** were recorded.
+
+## Goals
+
+> **Goal 1.** Turn two messy lab files into one clean, documented, *tidy* data set, and record everything that was changed.
+>
+> **Goal 2.** Describe the data with summary tables and show them with figures that are honest, readable, and accessible.
+
+## Guiding (descriptive) questions
+
+1. How many mice are in each genotype and treatment group, and is any data missing?
+2. What do the distributions of distance, center time, and body weight look like (shape, center, spread, unusual values)?
+3. How do distance and center time look in each group?
+4. How does body weight change over the three weeks in each group?
+
+::: {.callout-important}
+## Why there are no hypothesis tests in this notebook
+These are **descriptive** questions. We summarize and display *this sample*. Hypothesis tests, effect sizes, power, and Type I and Type II errors answer a different question: what the sample tells us about the *population*. They come in the later projects, which all start from clean data like those produced here. A difference you can see in a figure of 10 mice per group is a **hypothesis to test**, not a conclusion.
+:::
+
+## Why data handling matters for error rates
+
+Although we do no tests here, data handling affects the Type I and Type II errors of every test that follows. A typo can create a false effect or hide a real one. And every cleaning decision (which values to treat as errors, which animals to exclude) is a choice the researcher makes. If those choices are made *after* seeing how they change a result, the false-positive rate rises, so we write the **rules down first** (@sec-plan) and **log every change**.
+
+# Methods {#sec-methods}
+
+## Subjects and design
+
+Forty adult mice were studied: 20 WT and 20 KO, half female and half male in each genotype. Mice lived in **8 cages of 5**, each cage holding mice of one genotype and one sex. Within each cage, mice were assigned at random to **vehicle** or **drug** (10 mice in each genotype × treatment combination). *(Simulated data for teaching. In a real notebook, give the species/strain, age, source, housing, how animals were randomized, and the approval number of your animal-care protocol.)*
+
+## Procedure and measurements
+
+Mice received a daily injection for three weeks. **Body weight (g)** was measured on day 0 and then weekly (weeks 0 to 3). After the last weight measurement, each mouse spent 10 minutes in an open-field arena and a video system recorded the **distance traveled (m)** and the **time spent in the center (s)**. *(In a real notebook, give doses, route, arena size, lighting, time of day, and whether the experimenter was blind to treatment and genotype.)*
+
+## Data description {#sec-data}
+
+Two raw files describe the study. Both are **never edited by hand**: all changes are made in code, so every step is documented and repeatable.
 
 ```{r}
-#| echo: false
-2 * 2
+#| label: tbl-files
+#| tbl-cap: "The two raw data files"
+tribble(
+  ~File,                ~Source,                    ~Contents,
+  "open_field_raw.csv", "The lab's data-entry sheet", "One row per mouse (plus any errors): treatment, test date, four weekly body weights, open-field distance and center time, notes",
+  "animals.csv",        "The colony manager's records", "One row per mouse: genotype, sex, cage, birth date"
+) |>
+  pub_table(align = "lll")
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+### Types of variables (scales of measurement)
+
+The kind of variable determines which summaries and displays make sense.
+
+```{r}
+#| label: tbl-scales
+#| tbl-cap: "Variables and their scales of measurement"
+tribble(
+  ~Variable,        ~Scale,                  ~`Type in R`,   ~`Example summary`,         ~`Typical display`,
+  "genotype, treatment, sex", "Nominal (categories, no order)", "factor", "Counts, percentages", "Bar chart",
+  "cage, mouse_id", "Nominal (identifier)",  "character",  "Number of distinct values", "None (used to group or join)",
+  "week",           "Discrete numeric (0 to 3)", "integer",  "Value at each time", "Line plot",
+  "test_date, birth_date", "Date (interval)", "Date",       "Range, differences (age)", "Timeline",
+  "weight_g, distance_m, center_time_s", "Ratio (true zero)", "numeric", "Mean, SD, median, IQR", "Histogram, box plot, scatter plot"
+) |>
+  pub_table(align = "lllll")
+```
+
+### What "tidy" means
+
+::: {.callout-tip}
+## The three rules of tidy data
+1. **Each variable has its own column.** (Weight is *one* variable, not four columns for four weeks.)
+2. **Each observation has its own row.** (One mouse measured in week 2 is one observation.)
+3. **Each value has its own cell.** (The cell contains `20.7`, not `20.7 g` or `died`.)
+
+Tidy data work smoothly with `ggplot2`, `dplyr`, and almost every statistics function in R.
+:::
+
+::: {.callout-tip}
+## Rules for entering data in a spreadsheet
+- Use **one header row** with short names (no spaces or symbols; put units in the name, such as `weight_g`).
+- Use **one spelling** for each category (`Vehicle`, never `vehicle`, `VEH`, or `Vehicle ` with a trailing space).
+- Write **dates as YYYY-MM-DD**. Then `03/04` can never be confused between March 4 and April 3.
+- Leave a missing value **blank** (or `NA`). Never use 0 or -999, and never type comments or units in a numeric column. Put them in a separate `notes` column.
+- Do not use color or merged cells to carry information. Anything that matters must be in a cell.
+- Keep a **data dictionary** that explains every column (see `Data/README.md`).
+:::
+
+# Data Handling Plan {#sec-plan}
+
+Before opening the data, we decided the rules below. Writing them first keeps the cleaning honest: we do not decide what to change because of what the change does to a result.
+
+1. **Never edit the raw files.** Every change is made in code and recorded in a **cleaning log**.
+2. **Missing-value codes** (`-999`, `"NA"`, blank cells) all become R's `NA`. Missing is **not** zero.
+3. **Standardize labels:** one spelling per category.
+4. **Implausible weights.** A weight below 10 g or above 50 g is impossible for an adult mouse. If dividing it by 10 gives a value that agrees (within 3 g) with the same mouse's other weights, it is treated as a decimal-point typo and corrected; otherwise it is set to `NA`. *(In a real study, check the original lab notebook first.)*
+5. **Duplicates.** Exact duplicate rows are removed (one copy is kept).
+6. **Incomplete animals.** An animal that did not complete a measurement stays in the data with `NA` for that measurement. Nobody is dropped, and the reason is recorded.
+7. **Check before and after.** Keys are checked before tables are joined, and the clean data are validated against the study design.
+8. **Descriptive summaries.** Means and SDs (or medians and IQRs for skewed variables), with the number of valid values, for each group. Displays are matched to the variable type (@tbl-scales). **No hypothesis tests.**
+9. **Software.** Analyses were run in `r R.version.string` using the tidyverse (`readr`, `tidyr`, `dplyr`, `stringr`, `ggplot2`), `here`, and `patchwork`.
+
+```{r}
+#| label: rules
+weight_min <- 10    # grams: lower plausibility limit (rule 4)
+weight_max <- 50    # grams: upper plausibility limit (rule 4)
+```
+
+# Results and Conclusions {#sec-results}
+
+## First look at the raw file {#sec-import}
+
+We import the raw file and look at it **before changing anything**.
+
+```{r}
+#| label: import
+raw <- read_csv(here("Data", "open_field_raw.csv"), show_col_types = FALSE)
+glimpse(raw)
+```
+
+Three things already stand out. (1) The column names contain spaces, capital letters, and symbols, which makes them awkward to type in code. (2) `Weight Wk0 (g)` was read as **text** (`<chr>`) while the other weight columns are numbers: some cell in it is not a number. (3) `Test Date` was read as a real date, because it is written in the international standard format YYYY-MM-DD.
+
+```{r}
+#| label: raw-problems
+raw |> filter(!str_detect(`Weight Wk0 (g)`, "^[0-9.]+$"))   # which cell is not a number?
+```
+
+```{r}
+#| label: tbl-raw-summary
+#| tbl-cap: "Ranges of the numeric columns in the raw file (note the extreme values)"
+raw |>
+  summarize(across(c(starts_with("Weight"), `Distance (m)`, `Center Time (s)`),
+                   list(min = ~ min(parse_number(as.character(.x)), na.rm = TRUE),
+                        max = ~ max(parse_number(as.character(.x)), na.rm = TRUE),
+                        n_missing = ~ sum(is.na(.x))),
+                   .names = "{.col}|{.fn}")) |>
+  pivot_longer(everything(), names_to = c("Column", ".value"), names_sep = "\\|") |>
+  mutate(across(c(min, max), ~ fmt_num(.x, 1))) |>
+  rename(Minimum = min, Maximum = max, `Missing cells` = n_missing) |>
+  pub_table(align = "lccc")
+```
+
+The minimum of **−999** in `Weight Wk2 (g)` is a missing-value code (no mouse weighs −999 g), and the maximum of **260** in the same column is impossible for a mouse. Next, the categories and the IDs:
+
+```{r}
+#| label: tbl-raw-labels
+#| tbl-cap: "Every distinct spelling of the treatment labels in the raw file"
+count(raw, Treatment) |>
+  rename(`Label as typed` = Treatment, `Number of rows` = n) |>
+  mutate(`Label as typed` = paste0("\"", `Label as typed`, "\"")) |>
+  pub_table(align = "lc")
+```
+
+```{r}
+#| label: dup-check
+count(raw, `Animal ID`) |> filter(n > 1)              # IDs that appear more than once
+raw |> filter(`Animal ID` == "M27")                   # are the two rows identical?
+```
+
+R treats each spelling in @tbl-raw-labels as a different group, so counting or plotting by treatment would give **six** groups instead of two. The raw file also has one animal ID entered twice with identical values (M27) and, as we will see, one ID typed in lowercase.
+
+## Cleaning the behavior file {#sec-clean}
+
+### Column names
+
+We turn the names into lowercase text with underscores, using one rule that is applied to every column.
+
+```{r}
+#| label: names
+clean_names <- function(x) {
+  x |>
+    str_to_lower() |>
+    str_replace_all("[^a-z0-9]+", "_") |>   # anything that is not a letter or digit -> "_"
+    str_remove("^_|_$")                      # no leading or trailing underscores
+}
+
+dat <- raw |>
+  rename_with(clean_names) |>
+  rename(mouse_id = animal_id,
+         weight_g_wk0 = weight_wk0_g, weight_g_wk1 = weight_wk1_g,
+         weight_g_wk2 = weight_wk2_g, weight_g_wk3 = weight_wk3_g)
+
+names(dat)
+```
+
+### Fixing the problems, one at a time, with a log
+
+We keep a **cleaning log** that records what was found, how many rows it affected, and what was done.
+
+```{r}
+#| label: log-setup
+cleaning_log <- tibble(problem = character(), n_affected = integer(), action = character())
+log_step <- function(problem, n, action) {
+  cleaning_log <<- bind_rows(cleaning_log,
+                             tibble(problem = problem, n_affected = as.integer(n), action = action))
+}
+```
+
+**Animal IDs.** One ID was typed in lowercase.
+
+```{r}
+#| label: fix-ids
+n_id <- sum(dat$mouse_id != str_to_upper(str_trim(dat$mouse_id)))
+dat  <- dat |> mutate(mouse_id = str_to_upper(str_trim(mouse_id)))
+log_step("ID in lowercase or with spaces", n_id, "Converted to uppercase, trimmed spaces")
+```
+
+**Treatment labels.** We map every spelling to one of the two categories. If a label did not match either pattern, it would become `NA` and the check below would stop the notebook, so a surprise cannot slip through.
+
+```{r}
+#| label: fix-treatment
+n_trt <- sum(!dat$treatment %in% c("Vehicle", "Drug"))
+
+dat <- dat |>
+  mutate(
+    treatment = case_when(
+      str_detect(str_to_lower(treatment), "^veh")  ~ "Vehicle",
+      str_detect(str_to_lower(treatment), "^drug") ~ "Drug",
+      .default = NA_character_
+    )
+  )
+stopifnot(!anyNA(dat$treatment))     # stops with an error if any label did not match
+count(dat, treatment)
+log_step("Inconsistent treatment labels (vehicle, VEH, 'Drug ', ...)", n_trt,
+         "Mapped every spelling to 'Vehicle' or 'Drug'")
+```
+
+**Weights: text in a number column and a missing-value code.** `parse_number()` extracts the number from text such as `20.7 g`. The code `-999` becomes `NA`.
+
+```{r}
+#| label: fix-weights
+n_text <- sum(!is.na(dat$weight_g_wk0) & !str_detect(dat$weight_g_wk0, "^[0-9.]+$"))
+
+dat <- dat |>
+  mutate(across(starts_with("weight_g"), ~ parse_number(as.character(.x))))   # "20.7 g" -> 20.7
+log_step("Unit typed inside a weight cell ('20.7 g')", n_text, "Extracted the number")
+
+n_code <- sum(dat |> select(starts_with("weight_g"), distance_m, center_time_s) == -999, na.rm = TRUE)
+dat <- dat |>
+  mutate(across(c(starts_with("weight_g"), distance_m, center_time_s), ~ na_if(.x, -999)))
+log_step("Missing-value code -999", n_code, "Recoded as NA")
+```
+
+**Implausible weights.** We flag every value outside the plausible range, look at it in context, and apply rule 4.
+
+```{r}
+#| label: tbl-implausible
+#| tbl-cap: "Weights outside the plausible range (10 to 50 g)"
+implausible <- dat |>
+  pivot_longer(starts_with("weight_g"), names_to = "week", values_to = "weight_g") |>
+  filter(!is.na(weight_g), weight_g < weight_min | weight_g > weight_max) |>
+  select(mouse_id, week, weight_g)
+
+implausible |> pub_table(align = "lcc")
+```
+
+```{r}
+#| label: tbl-m18
+#| tbl-cap: "All weights recorded for the mouse with the implausible value"
+dat |>
+  filter(mouse_id %in% implausible$mouse_id) |>
+  select(mouse_id, starts_with("weight_g")) |>
+  pub_table(align = "lcccc")
+```
+
+The value `r implausible$weight_g` g for mouse `r implausible$mouse_id` is impossible, but `r implausible$weight_g / 10` g is exactly in line with the same mouse's other weights. By rule 4 it is a decimal-point typo, so we correct it and **keep a record** of the correction.
+
+```{r}
+#| label: fix-m18
+dat <- dat |>
+  mutate(weight_g_wk2 = if_else(mouse_id == "M18" & weight_g_wk2 == 260, 26.0, weight_g_wk2))
+log_step("Implausible weight (260 g, mouse M18, week 2)", nrow(implausible),
+         "Decimal-point typo (26.0 g); corrected by rule 4 and flagged here")
+```
+
+::: {.callout-warning}
+## Fixing a value is a decision, not a certainty
+We *inferred* that 260 meant 26.0. In a real study, check the original notebook or ask the person who weighed the animal. Report the correction, and if the conclusions change when the value is set to `NA` instead, say so.
+:::
+
+**Duplicates.**
+
+```{r}
+#| label: fix-dups
+n_dup <- nrow(dat) - nrow(distinct(dat))
+dat   <- distinct(dat)
+stopifnot(!anyDuplicated(dat$mouse_id))      # one row per mouse from here on
+log_step("Duplicated row (mouse M27 entered twice)", n_dup, "Removed the extra copy")
+```
+
+**Remaining missing values.** We count them and find out **why**, because the reason matters for how they are handled.
+
+```{r}
+#| label: tbl-missing
+#| tbl-cap: "Mice with at least one missing measurement"
+missing_mice <- dat |>
+  filter(if_any(c(starts_with("weight_g"), distance_m, center_time_s), is.na)) |>
+  mutate(`Missing` = pmap_chr(pick(c(starts_with("weight_g"), distance_m, center_time_s)),
+                              \(...) {
+                                v <- c(...)
+                                paste(names(v)[is.na(v)], collapse = ", ")
+                              })) |>
+  transmute(`Mouse` = mouse_id, Missing, `Reason recorded in notes` = replace_na(notes, "none recorded"))
+
+missing_mice |> pub_table(align = "lll")
+```
+
+```{r}
+#| label: log-missing
+log_step("Missing measurements (died, tracking failed, scale error, -999)",
+         nrow(missing_mice),
+         "Kept the animals; NA for the missing values (never 0); reasons recorded")
+```
+
+Mouse M33 died (so its later weights and the open-field test are truly missing), the tracking software failed for M12, and a weight was lost for M05 (code −999), M21 (the text "NA"), and M26. **M26's weight has no recorded reason**, and we cannot invent one: the next step in a real study is to ask the person who ran the animal. Whatever the reason, we **leave the cell as `NA`**. Using 0 would drag every average down, and filling in an average would hide the problem.
+
+## The animal records, and joining the two tables {#sec-join}
+
+The animal records have their own problem: the sex labels use six spellings.
+
+```{r}
+#| label: animals
+animals_raw <- read_csv(here("Data", "animals.csv"), show_col_types = FALSE)
+count(animals_raw, sex)
+
+animals <- animals_raw |>
+  rename(mouse_id = animal_id) |>
+  mutate(
+    mouse_id = str_to_upper(str_trim(mouse_id)),
+    sex      = case_when(str_to_upper(str_sub(sex, 1, 1)) == "F" ~ "Female",
+                         str_to_upper(str_sub(sex, 1, 1)) == "M" ~ "Male"),
+    genotype = factor(genotype, levels = c("WT", "KO"))     # birth_date is already a Date
+  )
+stopifnot(!anyNA(animals$sex), !anyDuplicated(animals$mouse_id))
+log_step("Inconsistent sex labels in the animal records (F, f, Female, ...)",
+         sum(!animals_raw$sex %in% c("Female", "Male")), "Mapped to 'Female' or 'Male'")
+```
+
+We want one table with the behavior data **and** the genotype, sex, and cage of each mouse. A **join** matches rows by a shared **key** (`mouse_id`). **Check the keys before joining**: `anti_join()` lists rows with no match in the other table.
+
+```{r}
+#| label: join-check
+anti_join(dat, animals, by = "mouse_id")       # in the behavior file but not in the records
+anti_join(animals, dat, by = "mouse_id")       # in the records but not in the behavior file
+```
+
+Both lists are empty: every mouse appears in both files. (Had we not fixed `m14` to `M14`, it would have appeared in the first list, which is exactly what this check is for.) Now we join. `left_join()` keeps every row of the first table and adds the matching columns from the second.
+
+```{r}
+#| label: join
+mice <- dat |>
+  left_join(animals, by = "mouse_id") |>
+  mutate(
+    treatment = factor(treatment, levels = c("Vehicle", "Drug")),   # control first
+    sex       = factor(sex, levels = c("Female", "Male")),
+    age_days  = as.numeric(test_date - birth_date)                  # a new variable: age at testing
+  ) |>
+  select(mouse_id, genotype, sex, treatment, cage, birth_date, test_date, age_days,
+         starts_with("weight_g"), distance_m, center_time_s, notes)
+
+glimpse(mice)
+```
+
+## Validating the clean data {#sec-validate}
+
+Before using the data, we check that they match what we know about the study. If any check fails, `stopifnot()` stops the notebook with an error, so a problem cannot go unnoticed.
+
+```{r}
+#| label: validate
+stopifnot(
+  nrow(mice) == 40,                                              # 40 mice
+  !anyDuplicated(mice$mouse_id),                                 # one row per mouse
+  all(count(mice, genotype, treatment)$n == 10),                 # 10 mice per group
+  all(mice$age_days > 60, mice$age_days < 200),                  # plausible ages
+  all(between(unlist(select(mice, starts_with("weight_g"))), weight_min, weight_max), na.rm = TRUE)
+)
+```
+
+All checks passed: there are `r nrow(mice)` mice, one row each, 10 in every genotype × treatment group, with plausible ages (`r min(mice$age_days)` to `r max(mice$age_days)` days) and weights.
+
+## Reshaping: wide to long {#sec-long}
+
+The cleaned `mice` table is in **wide** format: one row per mouse, one column per week. That is convenient for data entry. But "weight" is one variable, and in a wide table it is spread over four columns, so it breaks tidy rule 1. For plotting weight over time, we need **long** format: one row per mouse **per week**, with one column for weight and one for week.
+
+```{r}
+#| label: long
+weights_long <- mice |>
+  pivot_longer(
+    cols         = starts_with("weight_g_wk"),
+    names_to     = "week",
+    names_prefix = "weight_g_wk",
+    values_to    = "weight_g"
+  ) |>
+  mutate(week = as.integer(week)) |>
+  select(mouse_id, genotype, sex, treatment, cage, week, weight_g)
+
+head(weights_long, 8)
+```
+
+The table grew from `r nrow(mice)` rows (mice) to `r nrow(weights_long)` rows (`r nrow(mice)` mice × 4 weeks), of which `r sum(is.na(weights_long$weight_g))` have a missing weight. `pivot_wider()` goes the other way, so no information is lost.
+
+## The cleaning log and the saved clean data {#sec-save}
+
+@tbl-log-final is the record of every change made to the raw data. It belongs in the supplementary material of a real report.
+
+```{r}
+#| label: tbl-log-final
+#| tbl-cap: "Cleaning log: every problem found in the raw data and what was done"
+cleaning_log |>
+  rename(Problem = problem, `Rows affected` = n_affected, Action = action) |>
+  pub_table(align = "lcl")
+```
+
+We save the clean data to a **separate folder** (`output/data/`). The raw files in `Data/` are never overwritten.
+
+```{r}
+#| label: save-data
+dir.create(here("output", "data"), recursive = TRUE, showWarnings = FALSE)
+write_csv(mice,         here("output", "data", "mice_clean.csv"))
+write_csv(weights_long, here("output", "data", "weights_long.csv"))
+write_csv(cleaning_log, here("output", "data", "cleaning_log.csv"))
+```
+
+## Descriptive statistics {#sec-desc}
+
+### Design and missing data
+
+```{r}
+#| label: tbl-design
+#| tbl-cap: "Number of mice in each group, and number with usable data for each outcome"
+mice |>
+  group_by(Genotype = genotype, Treatment = treatment) |>
+  summarize(
+    `Mice (n)` = n(),
+    `Weight, week 3` = sum(!is.na(weight_g_wk3)),
+    `Distance` = sum(!is.na(distance_m)),
+    `Center time` = sum(!is.na(center_time_s)),
+    .groups = "drop"
+  ) |>
+  pub_table(align = "llcccc")
+```
+
+Whenever data are missing, the number of values behind each summary **differs** from the number of mice, so we always report the valid *n* with the mean.
+
+### Summary statistics by group
+
+```{r}
+#| label: tbl-desc
+#| tbl-cap: "Summary statistics by genotype and treatment: mean (SD); median [valid n]"
+summ <- function(x) {
+  tibble(
+    n      = sum(!is.na(x)),
+    mean   = mean(x, na.rm = TRUE),
+    sd     = sd(x, na.rm = TRUE),
+    median = median(x, na.rm = TRUE)
+  )
+}
+mice |>
+  pivot_longer(c(weight_g_wk3, distance_m, center_time_s), names_to = "var", values_to = "value") |>
+  mutate(var = factor(var, levels = c("weight_g_wk3", "distance_m", "center_time_s"),
+                      labels = c("Body weight, week 3 (g)", "Distance (m)", "Center time (s)"))) |>
+  group_by(Genotype = genotype, Treatment = treatment, var) |>
+  reframe(summ(value)) |>
+  mutate(cell = paste0(fmt_num(mean, 1), " (", fmt_num(sd, 1), "); ", fmt_num(median, 1),
+                       " [n = ", n, "]")) |>
+  select(Genotype, Treatment, var, cell) |>
+  pivot_wider(names_from = var, values_from = cell) |>
+  pub_table(align = "llccc")
+```
+
+Each cell shows **mean (SD); median [valid n]**. The mean and SD describe the center and spread of roughly symmetric data. For skewed data the **median** (and the interquartile range) is a better description of a typical value, as we see next.
+
+## Displaying the data {#sec-display}
+
+**Golden rules.** (1) *Show the data*, not just a summary. (2) *Match the display to the variable type and the question.* (3) *Label axes with units.* (4) *Use colorblind-friendly colors and a second cue* (shape or line type). (5) *Never truncate the axis of a bar chart.* (6) *Write alt text and a complete legend.*
+
+### Categories: counts
+
+For categorical data, a **bar chart of counts** (the bars start at zero).
+
+```{r}
+#| label: fig-counts
+#| fig-cap: "Number of mice in each genotype and treatment group."
+#| fig-alt: "Bar chart with two panels, WT and KO. In each panel, a blue bar for vehicle and an orange bar for drug, each of height 10 mice."
+#| fig-width: 5.5
+#| fig-height: 3.5
+mice |>
+  count(genotype, treatment) |>
+  ggplot(aes(treatment, n, fill = treatment)) +
+  geom_col(width = 0.6) +
+  geom_text(aes(label = n), vjust = -0.4) +
+  facet_wrap(~ genotype) +
+  scale_fill_manual(values = unname(pal[c("blue", "vermillion")]), guide = "none") +
+  scale_y_continuous(limits = c(0, 12), expand = c(0, 0)) +
+  labs(x = "Treatment", y = "Number of mice")
+```
+
+### One numeric variable: the distribution
+
+A **histogram** shows the shape, center, and spread, and reveals unusual values.
+
+```{r}
+#| label: fig-dist
+#| fig-cap: "Distributions of (A) distance traveled and (B) time in the center of the open field, for all mice with data."
+#| fig-alt: "Two histograms. Panel A, distance traveled, is spread roughly symmetrically around 50 meters with a few higher values. Panel B, time in center, is skewed to the right: most mice spent 20 to 50 seconds, with a few spending 80 to 110 seconds."
+#| fig-width: 8
+#| fig-height: 3.5
+fig_hist <- ggplot(mice, aes(distance_m)) +
+  geom_histogram(binwidth = 5, fill = pal["blue"], color = "white", na.rm = TRUE) +
+  labs(x = "Distance traveled (m)", y = "Number of mice")
+
+fig_hist_center <- ggplot(mice, aes(center_time_s)) +
+  geom_histogram(binwidth = 10, fill = pal["orange"], color = "white", na.rm = TRUE) +
+  labs(x = "Time in center (s)", y = "Number of mice")
+
+fig_dist <- fig_hist + fig_hist_center + plot_annotation(tag_levels = "A")
+fig_dist
+```
+
+```{r}
+#| label: skew
+ct <- mice$center_time_s[!is.na(mice$center_time_s)]
+dist <- mice$distance_m[!is.na(mice$distance_m)]
+```
+
+Distance is spread fairly symmetrically (mean `r fmt_num(mean(dist), 1)`, median `r fmt_num(median(dist), 1)`). Time in the center is **skewed to the right**: the mean (`r fmt_num(mean(ct), 1)` s) is pulled above the median (`r fmt_num(median(ct), 1)` s) by a few mice that spent much longer in the center. For such data, report the median, and keep skewness in mind when choosing a statistical test later.
+
+### A numeric variable by group
+
+For comparing groups, show **every animal** plus a summary (a box plot). Bars of means hide everything that matters.
+
+```{r}
+#| label: fig-groups
+#| fig-cap: "Distance traveled in the open field by treatment, separately for each genotype. Each point is one mouse; boxes show the median and interquartile range."
+#| fig-alt: "Dot plots with box plots for vehicle (blue circles) and drug (orange triangles) in two panels, WT and KO. In the WT panel the groups overlap substantially. In the KO panel, the drug group has higher distances than the vehicle group, with a wide spread."
+#| fig-width: 6.5
+#| fig-height: 4
+fig_groups <- ggplot(mice, aes(treatment, distance_m, color = treatment, shape = treatment)) +
+  geom_boxplot(width = 0.4, outlier.shape = NA, color = "gray40", fill = NA, na.rm = TRUE) +
+  geom_jitter(width = 0.12, height = 0, size = 2.3, alpha = 0.85, na.rm = TRUE) +
+  facet_wrap(~ genotype) +
+  scale_color_manual(values = unname(pal[c("blue", "vermillion")])) +
+  labs(x = "Treatment", y = "Distance traveled (m)") +
+  theme(legend.position = "none")
+fig_groups
+```
+
+### Two numeric variables: relationships
+
+A **scatter plot** shows whether two variables move together.
+
+```{r}
+#| label: fig-scatter
+#| fig-cap: "Distance traveled versus body weight at week 3. Each point is one mouse; color and shape show sex."
+#| fig-alt: "Scatter plot of distance traveled against body weight at week 3 with female mice as pink circles and male mice as green triangles. Male mice are heavier. There is no obvious overall trend between weight and distance."
+#| fig-width: 5.5
+#| fig-height: 4
+ggplot(mice, aes(weight_g_wk3, distance_m, color = sex, shape = sex)) +
+  geom_point(size = 2.5, alpha = 0.85, na.rm = TRUE) +
+  scale_color_manual(values = unname(pal[c("pink", "green")])) +
+  labs(x = "Body weight at week 3 (g)", y = "Distance traveled (m)",
+       color = "Sex", shape = "Sex")
+```
+
+Looking at this plot we can describe how the points are arranged, and nothing more. A *relationship you can see in a scatter plot* is what the **correlation and regression** project quantifies. Note that the heavier mice are mostly male, which is a reminder that **sex can be a confounding variable** here.
+
+### Change over time
+
+For repeated measurements, plot each animal's **trajectory** (thin lines) with the **group mean** and an error bar. Individual lines show the spread and whether the average represents any actual mouse.
+
+```{r}
+#| label: fig-time
+#| fig-cap: "Body weight over the three weeks, by treatment, separately for each genotype. Thin lines are individual mice; thick lines show the group mean and standard error (SE) of the mean."
+#| fig-alt: "Line plots of body weight over weeks 0 to 3 in two panels, WT and KO. Thin lines show individual mice. In both panels the mean weight of vehicle mice (blue, solid) rises over the weeks, while the mean weight of drug mice (orange, dashed) stays flat or falls slightly."
+#| fig-width: 7.5
+#| fig-height: 4
+week_means <- weights_long |>
+  group_by(genotype, treatment, week) |>
+  summarize(mean = mean(weight_g, na.rm = TRUE),
+            se = sd(weight_g, na.rm = TRUE) / sqrt(sum(!is.na(weight_g))),
+            .groups = "drop")
+
+ggplot(weights_long, aes(week, weight_g, color = treatment)) +
+  geom_line(aes(group = mouse_id), alpha = 0.25, na.rm = TRUE) +
+  geom_line(data = week_means, aes(y = mean, linetype = treatment), linewidth = 1.1) +
+  geom_pointrange(data = week_means, aes(y = mean, ymin = mean - se, ymax = mean + se,
+                                         shape = treatment), size = 0.45) +
+  facet_wrap(~ genotype) +
+  scale_color_manual(values = unname(pal[c("blue", "vermillion")])) +
+  scale_x_continuous(breaks = 0:3) +
+  labs(x = "Week", y = "Body weight (g)", color = "Treatment", linetype = "Treatment",
+       shape = "Treatment")
+```
+
+```{r}
+#| label: wk-change
+wk <- week_means |>
+  filter(week %in% c(0, 3)) |>
+  select(genotype, treatment, week, mean) |>
+  pivot_wider(names_from = week, names_prefix = "wk", values_from = mean) |>
+  mutate(change = wk3 - wk0)
+```
+
+The mean weight of vehicle mice changed by **`r fmt_num(wk$change[wk$genotype == "WT" & wk$treatment == "Vehicle"], 1)` g** (WT) and **`r fmt_num(wk$change[wk$genotype == "KO" & wk$treatment == "Vehicle"], 1)` g** (KO) from week 0 to week 3, whereas for drug mice it changed by **`r fmt_num(wk$change[wk$genotype == "WT" & wk$treatment == "Drug"], 1)` g** (WT) and **`r fmt_num(wk$change[wk$genotype == "KO" & wk$treatment == "Drug"], 1)` g** (KO). These are descriptions of the sample means. (With missing weeks, the means at different weeks are based on slightly different mice. A statistical model for repeated measures, covered in more advanced courses, handles this properly.)
+
+### Honest and misleading displays
+
+The same data can give very different impressions depending on the display. @fig-bad shows the distance traveled by treatment in three ways.
+
+```{r}
+#| label: fig-bad
+#| fig-cap: "The same data displayed three ways. (A) Bars with a truncated y-axis exaggerate the difference. (B) Bars alone hide the data. (C) Showing every point, with the mean and 95% confidence interval, lets the reader judge for themselves."
+#| fig-alt: "Three panels of distance traveled for vehicle and drug. Panel A, bars with an axis starting at 45, make the drug bar look several times taller. Panel B, bars starting at zero, show a modest difference with error bars. Panel C shows all individual points overlapping substantially, with a black mean and confidence interval for each group."
+#| fig-width: 9
+#| fig-height: 3.8
+bars_se <- mice |>
+  group_by(treatment) |>
+  summarize(mean = mean(distance_m, na.rm = TRUE),
+            se = sd(distance_m, na.rm = TRUE) / sqrt(sum(!is.na(distance_m))))
+
+bad1 <- ggplot(bars_se, aes(treatment, mean)) +
+  geom_col(fill = "gray60", width = 0.5) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.15) +
+  coord_cartesian(ylim = c(45, 60)) +            # TRUNCATED axis exaggerates the difference
+  labs(title = "Truncated axis", x = NULL, y = "Distance traveled (m)")
+
+bad2 <- ggplot(bars_se, aes(treatment, mean)) +
+  geom_col(fill = "gray60", width = 0.5) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.15) +
+  labs(title = "Bars hide the data", x = NULL, y = "Distance traveled (m)")
+
+ci_tbl <- mice |>
+  filter(!is.na(distance_m)) |>
+  group_by(treatment) |>
+  summarize(mean = mean(distance_m), n = n(),
+            half = qt(0.975, n - 1) * sd(distance_m) / sqrt(n), .groups = "drop")
+
+good <- ggplot(mice, aes(treatment, distance_m, color = treatment, shape = treatment)) +
+  geom_jitter(width = 0.12, height = 0, size = 2, alpha = 0.7, na.rm = TRUE) +
+  geom_pointrange(data = ci_tbl, aes(y = mean, ymin = mean - half, ymax = mean + half),
+                  color = "black", shape = 16, size = 0.5, linewidth = 0.9,
+                  position = position_nudge(x = 0.28)) +
+  scale_color_manual(values = unname(pal[c("blue", "vermillion")])) +
+  labs(title = "Show every point", x = NULL, y = "Distance traveled (m)") +
+  theme(legend.position = "none")
+
+bad1 + bad2 + good + plot_annotation(tag_levels = "A")
+```
+
+::: {.callout-caution}
+## Common display problems
+- **Truncated bar charts** (panel A): the height of a bar stands for the amount, so it must start at zero.
+- **"Dynamite plots"** (bars with error bars, panel B): they show only two numbers per group and hide the distribution, the sample size, and unusual points.
+- **Pie charts and 3-D effects**: people judge angles and volumes poorly. A bar chart of counts is clearer.
+- **Rainbow color scales and red-green pairs**: many readers cannot tell them apart. Use the Okabe-Ito palette used here, and add a second cue (shape or line type).
+- **Unlabeled error bars**: always state whether they show SD, SE, or a confidence interval (SD describes the data; SE and CI describe the precision of the mean).
+- **Overplotting**: when points overlap, use jitter, transparency, or a histogram.
+:::
+
+### A report-ready figure
+
+Panels can be combined with `patchwork` into one figure with letters for the legend, and saved at publication resolution (300 dpi).
+
+```{r}
+#| label: fig-report
+#| fig-cap: "Behavior and body weight of wild-type (WT) and knockout (KO) mice treated with vehicle or drug. (A) Distance traveled in the open field; each point is one mouse and boxes show the median and interquartile range. (B) Body weight over time; thin lines are individual mice and thick lines show the mean ± SE. (C, D) Distributions of distance traveled and of time in the center for all mice with data."
+#| fig-alt: "Four-panel figure. Panel A, dot and box plots of distance traveled by treatment in WT and KO mice. Panel B, body weight over weeks 0 to 3 with individual and mean lines. Panels C and D, histograms of distance traveled and time in the center."
+#| fig-width: 10
+#| fig-height: 8
+fig_time <- ggplot(weights_long, aes(week, weight_g, color = treatment)) +
+  geom_line(aes(group = mouse_id), alpha = 0.25, na.rm = TRUE) +
+  geom_line(data = week_means, aes(y = mean, linetype = treatment), linewidth = 1.1) +
+  geom_pointrange(data = week_means, aes(y = mean, ymin = mean - se, ymax = mean + se,
+                                         shape = treatment), size = 0.45) +
+  facet_wrap(~ genotype) +
+  scale_color_manual(values = unname(pal[c("blue", "vermillion")])) +
+  scale_x_continuous(breaks = 0:3) +
+  labs(x = "Week", y = "Body weight (g)", color = "Treatment", linetype = "Treatment",
+       shape = "Treatment")
+
+fig_report <- (fig_groups | fig_time) / fig_dist + plot_annotation(tag_levels = "A")
+fig_report
+
+dir.create(here("output", "figures"), recursive = TRUE, showWarnings = FALSE)
+ggsave(here("output", "figures", "fig_report_panels.png"), fig_report,
+       width = 10, height = 8, dpi = 300)
+```
+
+In @fig-report, panels A and B are two different "views" of the same mice. The first answers "how far did they go?" and the second "how did they grow?". Choose each panel for the **question it answers**, and say in the legend what every symbol means.
+
+## Writing up the data handling {#sec-writeup}
+
+Below is how this work would be written in a **Methods** section ("Data handling") and as a short **Results** description. The numbers are inserted directly from the analysis with inline R code, so they cannot be mistyped.
+
+::: {.callout-note icon=false appearance="simple"}
+### Data handling
+
+Raw data were stored in two files that were not edited by hand; all cleaning was done in R (version `r paste(R.version$major, R.version$minor, sep = ".")`) with the tidyverse and is documented in the project scripts. Treatment labels (`r nrow(count(raw, Treatment))` spellings) were standardized to Vehicle and Drug, and sex labels in the animal records to Female and Male. Missing-value codes (−999) were recoded as missing. One weight (`r implausible$weight_g` g, mouse `r implausible$mouse_id`, week 2) was identified as a decimal-point error (26.0 g) by comparison with the same animal's other weights and corrected, and one duplicated record was removed. A text unit typed in one weight cell was removed. Missing values were not imputed. `r sum(is.na(mice$weight_g_wk0) | is.na(mice$weight_g_wk1) | is.na(mice$weight_g_wk2) | is.na(mice$weight_g_wk3))` mice were missing at least one weight, and `r sum(is.na(mice$distance_m))` mice had no open-field data (one died on day 12 and tracking failed for one). All `r nrow(mice)` mice were retained in the data set. A full cleaning log is provided in the supplementary material.
+
+### Results (descriptive)
+
+Data were available for `r nrow(mice)` mice (10 per genotype × treatment group). Open-field data were available for `r sum(!is.na(mice$distance_m))` mice. Distance traveled was approximately symmetric (*M* = `r fmt_num(mean(dist), 1)` m, *SD* = `r fmt_num(sd(dist), 1)` m), whereas time in the center was right-skewed (median = `r fmt_num(median(ct), 1)` s, mean = `r fmt_num(mean(ct), 1)` s; @fig-dist). Group summaries are in @tbl-desc, and the distribution of distance in each group is shown in @fig-groups. Mean body weight of vehicle-treated mice rose over the three weeks, whereas that of drug-treated mice did not (@fig-time).
+:::
+
+Notice what the write-up does *not* say: it does not claim that the drug "reduced weight gain" or "increased activity". Those are statements about the population, which need the inferential tools of the next projects.
+
+## Conclusions and limitations {#sec-conclusions}
+
+**What we accomplished.** Two messy files became one clean, validated, documented, tidy data set (`r nrow(mice)` mice; `r nrow(weights_long)` mouse-weeks), with every change recorded in a cleaning log, and the raw files untouched. The summary tables and figures describe the data honestly and reproducibly: re-rendering this notebook rebuilds everything from the raw files.
+
+::: {.callout-warning}
+## Re-read the interpretation if your data change
+The numbers in the text update automatically, but the descriptions of patterns in the figures (and the alt text) do not. If you change the data or the analysis, re-read each figure and revise the text and alt text in your own words.
+:::
+
+**Limitations.**
+
+- **Corrections rest on assumptions.** The decimal-point correction was inferred, not confirmed. A real study should confirm it against source records.
+- **Missing data.** `r sum(complete.cases(select(mice, starts_with("weight_g"), distance_m, center_time_s)))` of `r nrow(mice)` mice have complete data. If missing values are not random (for example, a mouse dies *because* of the drug), analyses that ignore them can be biased. Report how much is missing and why.
+- **No inference.** Differences seen in the figures could be due to chance in samples of 10. Tests, effect sizes, and confidence intervals are needed before drawing conclusions about a population.
+- **Cages.** Mice in the same cage may be more alike than mice in different cages, so the animals are not fully independent. A real analysis should consider cage.
+- **Confounding.** Sex and genotype differ in body weight, so unadjusted comparisons of weights across groups can mislead.
+- **Simulated data.** These data were generated by a computer to illustrate the methods; they carry no real biological information.
+
+# A Guide to Presenting Data {#sec-guide}
+
+**Tables**
+
+1. Give the table a number and a **title** that says what is in it.
+2. Report the **n** (and the valid *n* if data are missing), with units in the column names.
+3. Use the same number of decimals within a column, and the precision the measurement justifies (not 8 digits).
+4. Use only horizontal rules (this notebook's `pub_table()` does), and no shading or gridlines.
+5. State what the numbers are: mean (SD), median [IQR], count (percent).
+
+**Figures**
+
+1. Label axes with **variable and units**. The y-axis of a bar chart starts at zero.
+2. **Show the data** (points, histograms) wherever *n* is small.
+3. Use **colorblind-friendly colors and a redundant cue** (shape, line type, labels).
+4. Write a **complete legend**: what is plotted, what each symbol and error bar means, and the *n*. A reader should understand the figure without the text.
+5. Write **alt text**, a short description of the pattern, for readers who use screen readers.
+6. Save at **300 dpi** (or as a vector format such as PDF or SVG) at the size it will be printed.
+7. Keep it simple. If a figure needs a long explanation, split it into panels.
+
+**Choosing a display**
+
+```{r}
+#| label: tbl-choose
+#| tbl-cap: "Which display for which question?"
+tribble(
+  ~`Question`,                                    ~`Variables`,                          ~`Display`,
+  "How many in each category?",                   "One categorical",                     "Bar chart of counts",
+  "What is the shape and spread?",                "One numeric",                         "Histogram (or density)",
+  "How do groups compare?",                       "Numeric by category",                 "Points with box plot (not bars alone)",
+  "Are two measurements related?",                "Two numeric",                         "Scatter plot",
+  "How does it change over time?",                "Numeric by time, repeated on the same animals", "Line plot with individual trajectories",
+  "Does the pattern differ by another variable?", "Any of the above plus a category",    "Small multiples (facets), color + shape"
+) |>
+  pub_table(align = "lll")
+```
+
+# Your Turn {#sec-your-turn}
+
+Change one thing at a time, re-render, and describe in the notebook log (below) what changed and why.
+
+1. **Break a check.** In the raw file, make a copy of the data and change one treatment label to `"Placebo"` (do it in code, not in the file). What happens when you run the treatment cleaning step? Why is it good that the notebook stops?
+2. **Change a rule.** Change rule 4 so that the 260 g value is set to `NA` instead of being corrected. How does the week-2 mean for that group change? Would it matter for a conclusion?
+3. **Missing is not zero.** Replace the missing weights with 0 (`replace_na(0)`) and recompute the mean weight at week 3. How wrong is the mean? Draw the histogram.
+4. **Mean versus median.** For `center_time_s`, compute the mean and median for each group. Which would you report, and why?
+5. **Wide and long.** Use `pivot_wider()` to turn `weights_long` back into a wide table. Then use `pivot_longer()` on it again. Do you get the same table?
+6. **Join problems.** Remove one mouse from `animals` before the join and run `anti_join()`. What does `left_join()` put in the genotype column for that mouse?
+7. **Fix the bad figure.** Take the "Truncated axis" panel and fix every problem you can find. Then build a version for a slide (larger text) and one for a printed paper.
+8. **Make it accessible.** Print a figure in grayscale (or use a color-blindness simulator). Can you still tell every group apart? What would you change if not?
+9. **A different display.** Show the center-time data by group with a **violin** plot (`geom_violin()`) plus points. When is a violin plot more or less informative than a box plot with points?
+10. **Your own data.** Replace the CSVs in `Data/` with a file of your own (messy is fine!), write your cleaning rules first, and work through the same steps.
+
+# Notebook Log {#sec-log}
+
+Keep a running record of decisions so that you (and your instructor) can see how the analysis developed. Add a row whenever you change something.
+
+```{r}
+#| label: tbl-log
+#| tbl-cap: "Analysis decision log (edit the rows below)"
+tribble(
+  ~Date,          ~`Decision or change`,                                          ~Reason,
+  "YYYY-MM-DD",   "Wrote cleaning rules 1 to 9 before opening the data",          "Avoid deciding what to fix based on how it changes a result",
+  "YYYY-MM-DD",   "Corrected 260 g to 26.0 g for M18 (week 2) by rule 4",         "Matches the same mouse's other weights; confirm with the lab notebook",
+  "",             "",                                                             ""
+) |>
+  pub_table(align = "lll")
+```
+
+# Reproducibility {#sec-repro}
+
+The R and package versions used to create this notebook are listed below.
+
+```{r}
+#| label: session-info
+sessionInfo()
+```
