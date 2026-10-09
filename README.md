@@ -16,6 +16,7 @@ Template R projects for an undergraduate **neuroscience research methods** cours
 | `correlation_regression` | Correlation and regression | **Ready for review** |
 | `one_sample_t_test` | One-sample t-test | **Ready for review** |
 | `two_sample_t_test` | Two-sample t-test | **Ready for review** |
+| `paired_t_test` | Paired-samples t-test, plus a lesson on many measurements per animal (nested data) | **Ready for review** |
 | `oneway_anova` | One-way analysis of variance | **Ready for review** |
 | `twoway_anova` | Two-way analysis of variance | **Ready for review** |
 | `chisquare_test` | Chi-square test | **Ready for review** |
@@ -24,10 +25,21 @@ Where appropriate, each project's notebook illustrates **null hypothesis testing
 
 ## Guides for planning your own project
 
-The `guides/` folder holds two documents to use *before* you analyze anything:
+The nine projects show *how to carry out* an analysis. The `guides/` folder helps you decide *which* analysis to carry out, and plan it, before you collect any data. It holds two Quarto documents (`.qmd`) and a short README. They are not RStudio projects and need no data file: open a `.qmd` in RStudio and click **Render**. Each installs a few small packages if they are missing.
 
-- **`choosing_a_test.qmd`**: a decision guide that takes you from your research question and study design to the right analysis (and the template project that models it).
-- **`analysis_plan_template.qmd`**: a fill-in analysis plan (hypotheses, design, sample size and power, exclusion rules, planned analysis) to complete before collecting data.
+| File | What it is | When to use it |
+|:--|:--|:--|
+| `guides/choosing_a_test.qmd` | **Decision guide.** A flowchart and a design-to-test table that take you from your research question and study design to an analysis, with the effect size to report, the assumptions to check, the R function to use, and the template project that models it. Also covers rank-based alternatives, assumption checks, the "unit of analysis" (pseudoreplication) warning, ten practice scenarios with answers, and a list of common mistakes. | At the start of an independent project, and whenever you are unsure which test fits your data. |
+| `guides/analysis_plan_template.qmd` | **Analysis plan template.** A fill-in plan: question, hypotheses and error rates, design, variables, sample size and power (change a few settings and the numbers update), exclusion and data-handling rules, the planned analysis, interpretation rules, a pre-collection checklist, and a deviations log. It ends with a completed example. | After choosing a test and *before* collecting data. Have your instructor review it. |
+
+**Suggested order for an independent project:**
+
+1. Read the decision guide and pick your analysis.
+2. Complete the analysis plan and have your instructor review it.
+3. Collect your data.
+4. Open the matching template project and use it as a model for your own lab notebook.
+
+Orange boxes in the decision-guide flowchart (repeated-measures designs and rank-based tests) do not yet have a template project; the guide gives the R functions to use for those. See `guides/README.md` for more detail.
 
 ## What is inside each project
 
@@ -60,6 +72,8 @@ Think of it like a lab notebook with its own labeled shelf: everything for one e
 
 ## Getting started (for students)
 
+*Planning your own study? Start with the two documents in `guides/` (see above) before opening a project.*
+
 1. **Install the software** (once):
    - [R](https://cran.r-project.org/) and [RStudio Desktop](https://posit.co/download/rstudio-desktop/). Current RStudio releases include Quarto; otherwise install it from [quarto.org](https://quarto.org/docs/get-started/).
 2. **Download this repository.** On GitHub, click the green **Code** button, then **Download ZIP**, and unzip it. (You do not need to use Git.)
@@ -84,7 +98,7 @@ The projects use the **tidyverse** (`dplyr`, `ggplot2`, `readr`, `purrr`, and fr
 
 1. One project per analysis; open the `.Rproj` file first.
 2. Keep raw data raw. Do all cleaning and calculation in code.
-3. State the question, hypotheses, and analysis plan (including exclusion rules and the significance level) *before* looking at results.
+3. State the question, hypotheses, and analysis plan (including exclusion rules and the significance level) *before* looking at results. The analysis plan template in `guides/` is built for this.
 4. Look at your data (summaries and plots) before you test anything.
 5. Check assumptions, then run the test.
 6. Report effect sizes and confidence intervals, not just *p*-values.

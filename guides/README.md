@@ -9,6 +9,6 @@ Two companion documents that sit *beside* the analysis projects. Neither needs a
 
 **Suggested order for an independent project:** read the decision guide, complete the analysis plan, have your instructor review it, collect the data, and then use the matching template project as a model for your lab notebook.
 
-Orange boxes in the decision-guide flowchart (paired t-test, repeated-measures designs, rank-based tests) do not yet have a template project; the guide gives the R functions to use.
+Orange boxes in the decision-guide flowchart (repeated-measures designs and rank-based tests) do not yet have a template project; the guide gives the R functions to use.
 
 These files install a few small packages if they are missing (`tibble`, `knitr`, and `kableExtra`; the plan template also uses `dplyr` and `pwr`).

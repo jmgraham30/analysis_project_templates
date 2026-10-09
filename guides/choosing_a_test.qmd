@@ -70,7 +70,7 @@ If you count cells in 4 sections from each of 6 mice, you have **6 independent u
 
 **What to do:**
 
-- **Simplest and safest for a course project:** average (or sum) the repeated measurements *within each animal first*, then analyze one number per animal. (This works best when each animal has about the same number of measurements.)
+- **Simplest and safest for a course project:** average (or sum) the repeated measurements *within each animal first*, then analyze one number per animal. (This works best when each animal has about the same number of measurements.) The special-topic section of the `paired_t_test` project shows this worked through, including a simulation of how badly the false-positive rate inflates when it is ignored.
 - **More advanced:** a *mixed-effects model* (random effect of animal) uses all the measurements correctly. Ask your instructor; it is beyond the templates in this repository.
 - **Repeated measurements of the *same animal under different conditions*** (before/after a drug, left/right hemisphere, days 1 to 5) are not independent either; they need *paired* or *repeated-measures* methods (@sec-table).
 
@@ -114,12 +114,12 @@ flowchart LR
   classDef have fill:#CFE8F7,stroke:#0072B2,color:#000
   classDef gap fill:#FBE3BF,stroke:#E69F00,color:#000
   classDef q fill:#F2F2F2,stroke:#666666,color:#000
-  class T1,T2,A1,F2,REG,X1,X2 have
-  class TP,RM,R gap
+  class T1,T2,TP,A1,F2,REG,X1,X2 have
+  class RM,R gap
   class A,U,B,N,C,G2,G3 q
 ```
 
-**Blue boxes** have a template project in this repository. **Orange boxes** do not yet; @sec-table gives the R functions to use, and your instructor can point you to help.
+**Blue boxes** have a template project in this repository. **Orange boxes** do not yet (repeated-measures ANOVA and the rank-based tests); @sec-table gives the R functions to use, and your instructor can point you to help.
 
 # The same information as a table {#sec-table}
 
@@ -133,7 +133,7 @@ tribble(
   "Do the means of two <b>different</b> groups of animals differ?",
     "Two-sample t-test (Welch)", "Cohen's <i>d</i> or Hedges' <i>g</i>, with CI", "Independent units; roughly normal within each group", "<code>t.test(y ~ group)</code>", "<code>two_sample_t_test</code>",
   "Did the <b>same</b> animals change between two conditions (before/after, left/right)?",
-    "Paired t-test (a one-sample t-test on the differences)", "Cohen's <i>d</i><sub>z</sub> on the differences", "Differences are roughly normal; pairs are independent of each other", "<code>t.test(after, before, paired = TRUE)</code>", "<i>not yet</i> (see <code>one_sample_t_test</code> for the logic)",
+    "Paired t-test (a one-sample t-test on the differences)", "Cohen's <i>d</i><sub>z</sub> on the differences", "Differences are roughly normal; pairs are independent of each other", "<code>t.test(after, before, paired = TRUE)</code>", "<code>paired_t_test</code>",
   "Do the means of 3 or more groups differ (one factor)?",
     "One-way ANOVA, then Tukey or Dunnett post hoc tests", "Eta-squared (η²) and CIs for differences", "Independent units; normal residuals; similar variances", "<code>aov(y ~ group)</code>; <code>TukeyHSD()</code>", "<code>oneway_anova</code>",
   "Do two factors (and their <b>interaction</b>) affect the mean?",
