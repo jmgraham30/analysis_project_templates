@@ -12,8 +12,8 @@ Template R projects for an undergraduate **neuroscience research methods** cours
 | Project folder | Analysis topic | Status |
 |:--|:--|:--|
 | `data_organization_and_display` | Organization and display of data | **Ready for review** |
-| `measures_tendency_variability` | Measures of central tendency and variability | Ready for review |
-| `correlation_regression` | Correlation and regression | Planned |
+| `measures_tendency_variability` | Measures of central tendency and variability | **Ready for review** |
+| `correlation_regression` | Correlation and regression | **Ready for review** |
 | `one_sample_t_test` | One-sample t-test | **Ready for review** |
 | `two_sample_t_test` | Two-sample t-test | **Ready for review** |
 | `oneway_anova` | One-way analysis of variance | **Ready for review** |

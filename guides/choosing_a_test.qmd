@@ -1,0 +1,268 @@
+---
+title: "Which Analysis Do I Need? A Decision Guide"
+subtitle: "From research question and study design to a statistical test (and the template that models it)"
+author: "Neuroscience Research Methods"
+date: today
+date-format: "MMMM D, YYYY"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    toc-location: left
+    number-sections: true
+    embed-resources: true
+    smooth-scroll: true
+    fig-align: center
+    grid:
+      body-width: 1000px
+      sidebar-width: 220px
+      margin-width: 100px
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+# This guide is self-contained: it needs only these three small packages.
+for (p in c("tibble", "knitr", "kableExtra")) {
+  if (!requireNamespace(p, quietly = TRUE)) install.packages(p, repos = "https://cloud.r-project.org")
+}
+library(tibble)
+library(knitr)
+library(kableExtra)
+
+guide_table <- function(x, ...) {
+  x |>
+    kbl(escape = FALSE, ...) |>
+    kable_classic(full_width = TRUE, html_font = "inherit", position = "center") |>
+    row_spec(0, bold = TRUE)
+}
+```
+
+::: {.callout-note icon=false}
+## How to use this guide
+
+You have a research question and (soon) some data. Statistics courses usually teach one test at a time; a real project starts the other way around: *"I have this design, so which analysis do I use?"* This guide takes you from your **design** to an **analysis**, and points to the template project in this repository that models it. **Decide on your analysis before you collect data**, and write it down using the *Analysis Plan Template* (`analysis_plan_template.qmd`, in this same folder).
+:::
+
+# Three questions that pick the test
+
+Almost every choice comes from three questions about your **outcome** (the thing you measure), your **groups or predictors**, and your **observations**.
+
+1. **What kind of outcome variable do I have?**
+   - **Numeric** (a measurement: distance traveled, firing rate, cell count, percent time): means and standard deviations make sense.
+   - **Categorical** (a count of animals or cells in categories: seized/did not seize, genotype): you analyze *counts* or *proportions*.
+   - **Ordinal** (ranks or ratings such as a 1–5 score) or **badly skewed with a small sample**: use rank-based methods (@sec-nonparametric).
+2. **What am I comparing?** One mean against a known value; two groups; three or more groups; two factors at once; or the relationship between two numeric variables.
+3. **Are my observations independent?** This is the question students most often skip, and it can invalidate an otherwise correct analysis (@sec-unit).
+
+# Step 0: What is one "n"? The unit of analysis {#sec-unit}
+
+Every test in this guide assumes that each data point is an **independent unit**. In neuroscience, the independent unit is almost always the **animal** (or the human participant), *not* the neuron, cell, brain section, or trial.
+
+::: {.callout-warning}
+## Pseudoreplication
+If you count cells in 4 sections from each of 6 mice, you have **6 independent units**, not 24. Cells from the same animal are more alike than cells from different animals. Treating them as independent makes the effective sample size look bigger than it is, makes standard errors too small, and produces false positives far more often than the 5% you intended.
+:::
+
+**What to do:**
+
+- **Simplest and safest for a course project:** average (or sum) the repeated measurements *within each animal first*, then analyze one number per animal.
+- **More advanced:** a *mixed-effects model* (random effect of animal) uses all the measurements correctly. Ask your instructor; it is beyond the templates in this repository.
+- **Repeated measurements of the *same animal under different conditions*** (before/after a drug, left/right hemisphere, days 1 to 5) are not independent either; they need *paired* or *repeated-measures* methods (@sec-table).
+
+| You measured... | Independent unit (the "n") |
+|:--|:--|
+| 10 neurons from each of 5 mice | 5 mice |
+| 3 brain sections per mouse, 8 mice per group | 8 mice per group |
+| Each of 12 mice before and after a drug | 12 mice (analyze the 12 *differences*) |
+| 6 pups from each of 4 litters | 4 litters (pups in a litter are not independent) |
+| One measurement from each of 30 mice in 3 groups | 30 mice (10 per group) |
+
+# The decision flowchart {#sec-flow}
+
+Start at the top and follow the answers. (The table in @sec-table has the same information with R functions, effect sizes, and assumptions.)
+
+```{mermaid}
+%%| fig-align: center
+%%| fig-width: 12
+%%{init: {"theme": "neutral", "themeVariables": {"fontSize": "16px"}, "flowchart": {"useMaxWidth": true}}}%%
+flowchart LR
+  A([Start: what is the outcome variable?]) --> U{{"Step 0: one row per independent<br/>animal? If not, average first."}}
+  U --> B{Outcome type}
+  B -->|Numeric measurement| N{What is the question?}
+  B -->|Counts in categories| C{How many categorical variables?}
+  B -->|Ordinal or small skewed sample| R[Rank-based alternatives<br/>see the nonparametric table]
+
+  N -->|Compare one mean to a known value| T1[One-sample t-test]
+  N -->|Compare two groups| G2{Same animals in both conditions?}
+  N -->|Compare three or more groups| G3{Same animals in all conditions?}
+  N -->|Two factors at once| F2[Two-way ANOVA<br/>mixed design if one factor is within-animal]
+  N -->|Relationship between two numeric variables| REG[Correlation and regression<br/>multiple regression for 2 or more predictors]
+
+  G2 -->|No: different animals| T2[Two-sample t-test<br/>Welch]
+  G2 -->|Yes: paired or matched| TP[Paired t-test<br/>analyze the differences]
+  G3 -->|No: different animals| A1[One-way ANOVA<br/>then post hoc comparisons]
+  G3 -->|Yes: repeated measures| RM[Repeated-measures ANOVA<br/>or mixed model]
+
+  C -->|One: compare to expected proportions| X1[Chi-square goodness of fit]
+  C -->|Two: is one related to the other?| X2[Chi-square test of independence<br/>Fisher exact if expected counts under 5]
+
+  classDef have fill:#CFE8F7,stroke:#0072B2,color:#000
+  classDef gap fill:#FBE3BF,stroke:#E69F00,color:#000
+  classDef q fill:#F2F2F2,stroke:#666666,color:#000
+  class T1,T2,A1,F2,REG,X1,X2 have
+  class TP,RM,R gap
+  class A,U,B,N,C,G2,G3 q
+```
+
+**Blue boxes** have a template project in this repository. **Orange boxes** do not yet; @sec-table gives the R functions to use, and your instructor can point you to help.
+
+# The same information as a table {#sec-table}
+
+```{r}
+#| label: tbl-main
+#| tbl-cap: "Design to analysis, with effect size, assumptions, and R function"
+tribble(
+  ~`Question and design`, ~Analysis, ~`Effect size`, ~`Main assumptions`, ~`R function`, ~`Template project`,
+  "Does the mean of one group differ from a known or chance value?",
+    "One-sample t-test", "Cohen's <i>d</i>", "Independent units; roughly normal data (or large n)", "<code>t.test(x, mu = 0)</code>", "<code>one_sample_t_test</code>",
+  "Do the means of two <b>different</b> groups of animals differ?",
+    "Two-sample t-test (Welch)", "Cohen's <i>d</i> or Hedges' <i>g</i>, with CI", "Independent units; roughly normal within each group", "<code>t.test(y ~ group)</code>", "<code>two_sample_t_test</code>",
+  "Did the <b>same</b> animals change between two conditions (before/after, left/right)?",
+    "Paired t-test (a one-sample t-test on the differences)", "Cohen's <i>d</i><sub>z</sub> on the differences", "Differences are roughly normal; pairs are independent of each other", "<code>t.test(after, before, paired = TRUE)</code>", "<i>not yet</i> (see <code>one_sample_t_test</code> for the logic)",
+  "Do the means of 3 or more groups differ (one factor)?",
+    "One-way ANOVA, then Tukey or Dunnett post hoc tests", "Eta-squared (η²) and CIs for differences", "Independent units; normal residuals; similar variances", "<code>aov(y ~ group)</code>; <code>TukeyHSD()</code>", "<code>oneway_anova</code>",
+  "Do two factors (and their <b>interaction</b>) affect the mean?",
+    "Two-way ANOVA; simple effects if the interaction matters", "Partial η²", "As for one-way ANOVA; balanced design is best", "<code>aov(y ~ A * B)</code>", "<code>twoway_anova</code>",
+  "Does the same animal's measurement change over several times or conditions?",
+    "Repeated-measures ANOVA or a mixed-effects model", "Generalized η²", "Sphericity (or use a mixed model); normal residuals", "<code>rstatix::anova_test(..., within = )</code>; <code>lme4::lmer()</code>", "<i>not yet</i>",
+  "Are two numeric variables related? Can one predict the other?",
+    "Pearson correlation; simple linear regression (multiple regression for 2+ predictors)", "<i>r</i>, <i>R</i>², the slope with its CI", "Linear relationship; independent units; normal, equal-variance residuals", "<code>cor.test()</code>; <code>lm(y ~ x)</code>", "<code>correlation_regression</code>",
+  "Do observed counts match expected proportions (one categorical variable)?",
+    "Chi-square goodness-of-fit test", "Cohen's <i>w</i>", "Independent observations; expected count of at least 5 in each cell", "<code>chisq.test(counts, p = expected)</code>", "<code>chisquare_test</code>",
+  "Are two categorical variables associated?",
+    "Chi-square test of independence (Fisher's exact test if counts are small)", "φ or Cramér's <i>V</i>; risk ratio; odds ratio", "Independent observations; expected counts of at least 5 (otherwise Fisher)", "<code>chisq.test(table)</code>; <code>fisher.test()</code>", "<code>chisquare_test</code>",
+  "Just describing the sample (no test)",
+    "Means, SDs, medians, IQRs, confidence intervals, graphs", "—", "—", "<code>summarize()</code>; <code>ggplot()</code>", "<code>measures_tendency_variability</code>; <code>data_organization_and_display</code>"
+) |>
+  guide_table(align = "llllll")
+```
+
+# When the assumptions are doubtful: rank-based alternatives {#sec-nonparametric}
+
+Use these when the outcome is **ordinal**, when the sample is **small and clearly skewed or has extreme outliers**, or as a **robustness check** next to your main analysis. They compare ranks rather than means, so they are less affected by outliers but answer a slightly different question (about the "typical" or median difference, not the mean).
+
+```{r}
+#| label: tbl-nonpar
+#| tbl-cap: "Parametric tests and their rank-based alternatives"
+tribble(
+  ~`Instead of...`,              ~`Use...`,                                   ~`R function`,
+  "One-sample t-test",            "Wilcoxon signed-rank test",                 "<code>wilcox.test(x, mu = 0)</code>",
+  "Two-sample t-test",            "Mann–Whitney U (Wilcoxon rank-sum) test",   "<code>wilcox.test(y ~ group)</code>",
+  "Paired t-test",                "Wilcoxon signed-rank test on the pairs",    "<code>wilcox.test(after, before, paired = TRUE)</code>",
+  "One-way ANOVA",                "Kruskal–Wallis test (Dunn's test afterward)", "<code>kruskal.test(y ~ group)</code>",
+  "Repeated-measures ANOVA",      "Friedman test",                             "<code>friedman.test()</code>",
+  "Pearson correlation",          "Spearman or Kendall correlation",           "<code>cor.test(x, y, method = \"spearman\")</code>",
+  "Chi-square (small counts)",    "Fisher's exact test",                       "<code>fisher.test()</code>"
+) |>
+  guide_table(align = "lll")
+```
+
+::: {.callout-tip}
+## Do not "shop" for the test that gives p < .05
+Choose your primary analysis **before** looking at the results, and say what you will do if an assumption fails (this is part of the analysis plan). Running several tests and reporting only the significant one inflates your false-positive rate.
+:::
+
+# Quick checks before you trust a test {#sec-assumptions}
+
+```{r}
+#| label: tbl-checks
+#| tbl-cap: "How to check each assumption (look at a plot first; tests are only a supplement)"
+tribble(
+  ~Assumption,                   ~`How to check`,                                                       ~`If it fails`,
+  "Independence",                "Think about the <b>design</b>. No plot or test can detect it.",         "Change the unit of analysis (average per animal), or use a paired, repeated-measures, or mixed model.",
+  "Normality",                   "Histogram and Q-Q plot of each group (t-tests) or of the <b>residuals</b> (ANOVA, regression). Shapiro–Wilk is only a supplement.", "With n of about 30 or more per group, mild skew is usually fine. Otherwise transform (for example, log) or use a rank-based test.",
+  "Equal variances",             "Compare group SDs and boxplots. A ratio of the largest to the smallest SD above about 2 is a warning.", "Use Welch's t-test (the default in R) or Welch's ANOVA.",
+  "Linearity (regression)",      "Scatterplot and residuals-versus-fitted plot.",                        "Transform a variable, add a curve, or use a rank correlation.",
+  "No extreme outliers",         "Boxplots and the residual and Cook's distance plots. Check for typing errors first.", "Do not delete a point just because it is inconvenient. Report the analysis with and without it.",
+  "Expected counts at least 5 (chi-square)", "Look at <code>chisq.test(...)$expected</code>.",              "Use Fisher's exact test or a Monte Carlo <i>p</i>-value."
+) |>
+  guide_table(align = "lll")
+```
+
+# Practice: which analysis would you use? {#sec-practice}
+
+Try each scenario yourself before opening the answer. Always ask: *what is the independent unit?*
+
+::: {.callout-note collapse="true"}
+## 1. Locomotion in 12 mice measured before and after an amphetamine injection
+**Paired t-test** on the 12 differences (after − before), because the same mice were measured twice. If the differences are clearly non-normal, use the Wilcoxon signed-rank test. A two-sample t-test would be wrong: it ignores the pairing and throws away power.
+:::
+
+::: {.callout-note collapse="true"}
+## 2. Four hippocampal sections per mouse; cells counted in each; 6 wild-type and 6 knockout mice
+**Average the four sections within each mouse**, then run a **two-sample (Welch) t-test** with n = 6 per group. Treating the 48 section counts as independent would be pseudoreplication.
+:::
+
+::: {.callout-note collapse="true"}
+## 3. Freezing (% of time) in mice given vehicle, a low, or a high dose of a drug; 8 mice per dose
+**One-way ANOVA**, followed by post hoc comparisons (Tukey for all pairs, or Dunnett if the comparisons are to vehicle only). Report η² and confidence intervals for the differences. If freezing is skewed or the groups are tiny, add Kruskal–Wallis as a check.
+:::
+
+::: {.callout-note collapse="true"}
+## 4. Body weight in mice of two genotypes and both sexes
+**Two-way ANOVA (genotype × sex)**. Look at the **interaction** first: if the genotype effect differs between sexes, interpret the simple effects rather than the main effects alone.
+:::
+
+::: {.callout-note collapse="true"}
+## 5. Time to find the hidden platform (latency) in the same 10 mice on days 1 to 5
+**Repeated-measures ANOVA** (or a mixed-effects model) with day as the within-animal factor. A one-way ANOVA on the five days would wrongly treat 50 measurements as independent.
+:::
+
+::: {.callout-note collapse="true"}
+## 6. Number of mice (out of 8 per group) that had a seizure after drug or vehicle
+**Fisher's exact test**. The outcome is categorical and the counts are small (expected counts below 5), so the chi-square approximation is unreliable. Report the odds ratio or risk difference with a confidence interval.
+:::
+
+::: {.callout-note collapse="true"}
+## 7. Hippocampal volume and memory score in 25 mice
+**Correlation (Pearson, with Spearman as a check) and simple linear regression.** Plot the data first. Remember that the design is observational, so avoid causal wording.
+:::
+
+::: {.callout-note collapse="true"}
+## 8. Genotypes of 80 pups from heterozygous crosses; expected ratio 1 : 2 : 1
+**Chi-square goodness-of-fit test** against the Mendelian proportions (0.25, 0.50, 0.25). Check that each expected count is at least 5 (here 20, 40, 20). Pups from the same litter are not fully independent, so mention litter as a limitation.
+:::
+
+::: {.callout-note collapse="true"}
+## 9. Mean percent time in the open arm of an elevated plus maze in 14 mice, compared with a "no preference" value of 50%
+**One-sample t-test** against 50. Report the mean difference, its confidence interval, and Cohen's *d*.
+:::
+
+::: {.callout-note collapse="true"}
+## 10. A 1 to 5 pain-behavior score in two groups of 9 mice
+**Mann–Whitney U test.** The scores are ordinal, and the sample is small, so the ranks are more appropriate than means.
+:::
+
+# Common mistakes {#sec-mistakes}
+
+1. **Wrong unit of analysis** (cells, sections, or trials treated as animals; @sec-unit).
+2. **Running many t-tests instead of one ANOVA.** Each test has a 5% false-positive chance; across several tests the overall risk climbs (three groups give three comparisons and roughly 14% risk of at least one false positive).
+3. **Ignoring the pairing** (a two-sample test on before/after data) or **imagining a pairing** that does not exist.
+4. **Testing assumptions only with a significance test.** With small samples such tests have little power; with large samples they flag trivial departures. Look at plots.
+5. **Interpreting a non-significant result as "no effect."** Report the effect size and confidence interval, and what your sample size could have detected.
+6. **Interpreting main effects when there is an interaction** in a factorial design.
+7. **Choosing the test, the exclusions, or one-tailed testing after seeing the data.** Decide them in advance (see the analysis plan).
+8. **Causal language for correlational designs** ("running increased neurogenesis" when running was not assigned).
+9. **Reporting only *p*.** Report the test statistic, degrees of freedom, exact *p*, an effect size, and a confidence interval.
+10. **Too many outcomes, no correction.** If you test 20 outcomes, one will be "significant" by chance. Pick a primary outcome in advance, or adjust (for example, Holm).
+
+# Where to go next
+
+- **Plan before you collect:** fill in `analysis_plan_template.qmd`.
+- **See a worked example** of your chosen analysis in the matching template project, and use its notebook as a model for your methods, results, and conclusions.
+- **Write it up:** every template notebook ends with a "Guide to Writing Up Results" and a worked Results paragraph.

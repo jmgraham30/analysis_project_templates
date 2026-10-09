@@ -1,0 +1,336 @@
+---
+title: "Statistical Analysis Plan"
+subtitle: "Complete this BEFORE you collect (or look at) your data"
+author: "Your Name"
+date: today
+date-format: "MMMM D, YYYY"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    toc-location: left
+    number-sections: true
+    embed-resources: true
+    smooth-scroll: true
+    code-fold: show
+    code-tools: true
+    include-in-header:
+      - text: |
+          <style>
+            .prompt { color: #555; background: #f4f4f4; border-left: 4px solid #0072B2;
+                      padding: 0.5rem 0.9rem; margin: 0.8rem 0; font-size: 0.95em; }
+            .fillin { color: #8a4b00; font-style: italic; }
+          </style>
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+::: {.callout-note icon=false}
+## How to use this template
+
+An **analysis plan** is a short document, written *before* you collect or look at your data, that says what you will measure, how many animals you need, which test you will run, and how you will decide what the result means. Writing it first protects you from (often unintentional) choices made after seeing the results, such as picking the test that gives *p* < .05, dropping "inconvenient" animals, or switching to a one-tailed test. It also makes your lab notebook, your poster, and your paper far easier to write.
+
+1. Open this file in RStudio. **Replace every orange text that says `[...]`** with your own answers. Delete the gray prompts if you like.
+2. Use the **Decision Guide** (`choosing_a_test.qmd`) to choose your analysis.
+3. Edit the settings in the **sample size** code chunk (@sec-power) and **Render**. The numbers in the text are computed for you.
+4. Have your instructor review the plan **before** you collect data. Save the rendered version with the date.
+5. After you collect data, **do not edit the plan**. Record any change in the deviations log (@sec-deviations), with the reason. Honest deviations are fine; hidden ones are not.
+
+The examples (in gray) use a made-up experiment about a drug and locomotor activity. A complete filled-in example is in @sec-example.
+:::
+
+```{r}
+#| label: setup
+# Small, self-contained setup: these packages are installed if missing.
+for (p in c("tibble", "pwr", "knitr", "kableExtra")) {
+  if (!requireNamespace(p, quietly = TRUE)) install.packages(p, repos = "https://cloud.r-project.org")
+}
+library(tibble)
+library(pwr)
+library(knitr)
+library(kableExtra)
+
+plan_table <- function(x, ...) {
+  x |>
+    kbl(escape = FALSE, ...) |>
+    kable_classic(full_width = TRUE, html_font = "inherit", position = "center") |>
+    row_spec(0, bold = TRUE)
+}
+```
+
+| | |
+|:--|:--|
+| **Project title** | [Your title]{.fillin} |
+| **Student(s)** | [Name(s)]{.fillin} |
+| **Instructor / mentor** | [Name]{.fillin} |
+| **Plan version and date** | [Version 1, date]{.fillin} |
+| **Status** | [Draft / Approved on (date)]{.fillin} |
+
+# Research question and rationale
+
+::: {.prompt}
+In one or two sentences, what do you want to know, and why? Name the **outcome** you will measure and the **groups or predictors** you will compare. A good question can be answered with data. Example: *"Does a low dose of drug X increase locomotor activity (distance traveled in an open field) in adult mice compared with saline?"*
+:::
+
+**Research question.** [Replace with your question.]{.fillin}
+
+**Background (2 to 4 sentences).** [What is already known, and what gap does your project fill?]{.fillin}
+
+# Hypotheses and error rates
+
+::: {.prompt}
+State the **scientific hypothesis** in words, and then the **null and alternative hypotheses** in statistical form. Decide now whether your test is one- or two-tailed. A one-tailed test needs a strong reason that is *independent of your data* (for example, an effect in the other direction would be uninterpretable); otherwise use two-tailed.
+:::
+
+**Scientific hypothesis.** [For example: Drug X increases locomotor activity.]{.fillin}
+
+**Null hypothesis (H~0~).** [For example: The mean distance traveled is the same in the drug and saline groups (μ~drug~ − μ~saline~ = 0).]{.fillin}
+
+**Alternative hypothesis (H~1~).** [For example: The means differ (μ~drug~ − μ~saline~ ≠ 0).]{.fillin}
+
+**Tails.** [Two-tailed / one-tailed, and why.]{.fillin}
+
+**Significance level (α).** [Usually .05. This is the Type I error rate (false positive) you accept.]{.fillin}
+
+**Type I and Type II errors in this study.** [In your own words: what would a Type I error mean for your project (concluding there is an effect when there is none), and what would a Type II error mean (missing a real effect)? Which would be worse here, and why?]{.fillin}
+
+# Study design
+
+::: {.prompt}
+Describe how animals (or participants) will be assigned and measured. Be specific about what the **independent unit** is: the thing that counts as one "n". Cells, sections, and trials from the same animal are **not** independent (see the Decision Guide).
+:::
+
+| Item | Your plan |
+|:--|:--|
+| **Design** (between-groups, within-animal/repeated, factorial, correlational) | [ ]{.fillin} |
+| **Independent variable(s) / factor(s) and levels** | [For example: Drug (saline, 2 mg/kg, 5 mg/kg)]{.fillin} |
+| **Independent unit (one "n")** | [For example: one mouse]{.fillin} |
+| **Number of groups** | [ ]{.fillin} |
+| **How animals are assigned to groups** (random assignment? how?) | [For example: random number list]{.fillin} |
+| **Blinding** (who knows the group labels, and when?) | [ ]{.fillin} |
+| **Controls** | [For example: saline vehicle, same injection volume and timing]{.fillin} |
+| **Repeated measurements within an animal?** How handled (average first, paired test, repeated-measures)? | [ ]{.fillin} |
+| **Possible confounds and how you will limit them** (time of day, sex, cage, litter, experimenter) | [ ]{.fillin} |
+
+# Variables
+
+```{r}
+#| label: tbl-vars
+#| tbl-cap: "Variables in the study (edit the rows)"
+tribble(
+  ~Variable,        ~Role,                    ~Scale,                  ~`Units / levels`,         ~`How measured`,
+  "[distance_m]",   "Outcome (primary)",      "[Numeric (ratio)]",     "[meters in 30 min]",      "[Video tracking]",
+  "[group]",        "Predictor (factor)",     "[Categorical]",         "[saline, 2 mg/kg]",       "[Assigned]",
+  "[sex]",          "[Covariate / factor]",   "[Categorical]",         "[F, M]",                  "[Recorded]",
+  "[ ]",            "[ ]",                    "[ ]",                   "[ ]",                     "[ ]"
+) |>
+  plan_table(align = "lllll")
+```
+
+**Primary outcome.** [Name the *one* main outcome that your conclusion will rest on. If you measure many outcomes, the others are secondary or exploratory (@sec-analysis).]{.fillin}
+
+# Sample size and power {#sec-power}
+
+::: {.prompt}
+**Power** is the probability that your study will detect an effect of a given size if it is real. Too few animals and you are likely to miss a real effect (Type II error); the animals you do use are then wasted. Choose the **smallest effect you would consider scientifically meaningful**, or take an estimate from a pilot study or the published literature (published effects from small studies tend to be exaggerated, so be conservative). Then calculate how many animals you need. Do **not** calculate "power" from the effect you observed after the study; it adds no information.
+:::
+
+Edit the settings in the chunk below to match your design, then render. **The values shown are only an example.**
+
+```{r}
+#| label: power-settings
+# ---- EDIT THESE SETTINGS --------------------------------------------------
+test_type   <- "two_sample_t"  # "one_sample_t", "two_sample_t", "paired_t",
+                               # "anova" (one-way), "correlation", or "chisq"
+effect      <- 0.8             # the effect size you want to detect:
+                               #   t-tests: Cohen's d   (small 0.2, medium 0.5, large 0.8)
+                               #   anova:   Cohen's f   (small 0.1, medium 0.25, large 0.4)
+                               #   correlation: r       (small 0.1, medium 0.3, large 0.5)
+                               #   chisq:   Cohen's w   (small 0.1, medium 0.3, large 0.5)
+alpha       <- 0.05            # Type I error rate
+power_goal  <- 0.80            # desired power (1 - Type II error rate)
+k_groups    <- 3               # number of groups (one-way ANOVA only)
+chisq_df    <- 1               # degrees of freedom (chi-square only)
+n_available <- 8               # the most animals (per group, or pairs, or total) you can realistically use
+attrition   <- 0.10            # fraction you expect to lose (illness, exclusions)
+# ---------------------------------------------------------------------------
+
+# n needed for the chosen effect size (per group for group designs; pairs for
+# paired designs; animals for one-sample and correlation; total N for chi-square)
+n_needed <- function(es) {
+  switch(test_type,
+    one_sample_t = pwr.t.test(d = es, sig.level = alpha, power = power_goal, type = "one.sample")$n,
+    two_sample_t = pwr.t.test(d = es, sig.level = alpha, power = power_goal, type = "two.sample")$n,
+    paired_t     = pwr.t.test(d = es, sig.level = alpha, power = power_goal, type = "paired")$n,
+    anova        = pwr.anova.test(k = k_groups, f = es, sig.level = alpha, power = power_goal)$n,
+    correlation  = pwr.r.test(r = es, sig.level = alpha, power = power_goal)$n,
+    chisq        = pwr.chisq.test(w = es, df = chisq_df, sig.level = alpha, power = power_goal)$N,
+    stop("Unknown test_type"))
+}
+
+# Smallest effect detectable with power_goal if you can only use n_available
+min_effect <- function(n) {
+  switch(test_type,
+    one_sample_t = pwr.t.test(n = n, sig.level = alpha, power = power_goal, type = "one.sample")$d,
+    two_sample_t = pwr.t.test(n = n, sig.level = alpha, power = power_goal, type = "two.sample")$d,
+    paired_t     = pwr.t.test(n = n, sig.level = alpha, power = power_goal, type = "paired")$d,
+    anova        = pwr.anova.test(k = k_groups, n = n, sig.level = alpha, power = power_goal)$f,
+    correlation  = pwr.r.test(n = n, sig.level = alpha, power = power_goal)$r,
+    chisq        = pwr.chisq.test(N = n, df = chisq_df, sig.level = alpha, power = power_goal)$w,
+    stop("Unknown test_type"))
+}
+
+# Power you would have with n_available animals for your chosen effect size
+power_at <- function(n, es) {
+  switch(test_type,
+    one_sample_t = pwr.t.test(n = n, d = es, sig.level = alpha, type = "one.sample")$power,
+    two_sample_t = pwr.t.test(n = n, d = es, sig.level = alpha, type = "two.sample")$power,
+    paired_t     = pwr.t.test(n = n, d = es, sig.level = alpha, type = "paired")$power,
+    anova        = pwr.anova.test(k = k_groups, n = n, f = es, sig.level = alpha)$power,
+    correlation  = pwr.r.test(n = n, r = es, sig.level = alpha)$power,
+    chisq        = pwr.chisq.test(N = n, w = es, df = chisq_df, sig.level = alpha)$power,
+    stop("Unknown test_type"))
+}
+
+unit_label <- switch(test_type,
+  one_sample_t = "animals", two_sample_t = "animals per group", paired_t = "pairs (animals measured twice)",
+  anova = "animals per group", correlation = "animals", chisq = "observations in total")
+es_label   <- switch(test_type, one_sample_t = , two_sample_t = , paired_t = "Cohen's d",
+                     anova = "Cohen's f", correlation = "r", chisq = "Cohen's w")
+
+n_calc    <- ceiling(n_needed(effect))
+n_enroll  <- ceiling(n_calc / (1 - attrition))
+min_det   <- min_effect(n_available)
+pow_avail <- power_at(n_available, effect)
+```
+
+```{r}
+#| label: tbl-power
+#| tbl-cap: "Sample size needed for 80% power at conventional effect sizes (for the test chosen above)"
+benchmarks <- switch(test_type,
+  one_sample_t = , two_sample_t = , paired_t = c(0.2, 0.5, 0.8),
+  anova = c(0.1, 0.25, 0.4), correlation = c(0.1, 0.3, 0.5), chisq = c(0.1, 0.3, 0.5))
+tibble(Size = c("Small", "Medium", "Large"), es = benchmarks) |>
+  dplyr::mutate(n = vapply(es, function(e) ceiling(n_needed(e)), numeric(1))) |>
+  dplyr::transmute(`Effect size` = Size,
+                   !!es_label := formatC(es, format = "f", digits = 2),
+                   !!paste("Needed:", unit_label) := n) |>
+  plan_table(align = "lcc")
+```
+
+**Calculation for my study.** For a **`r es_label` of `r effect`** (two-tailed α = `r alpha`, power = `r 100 * power_goal`%), I need **`r n_calc` `r unit_label`**. Allowing for an expected loss of `r round(100 * attrition)`%, I will plan to start with **`r n_enroll` `r unit_label`**.
+
+**What my realistic sample can detect.** If I can only use **`r n_available` `r unit_label`**, my study has **`r round(100 * pow_avail)`% power** for a `r es_label` of `r effect`, and the smallest effect I can detect with `r 100 * power_goal`% power is a `r es_label` of about **`r formatC(min_det, format = "f", digits = 2)`**. `r if (n_available >= n_calc) "My available sample is large enough for the effect I chose." else "My available sample is **smaller** than the calculation requires. If I find no significant effect, I will not conclude that there is none; I will report the effect size and confidence interval and say that the study could only detect large effects."`
+
+**Where my effect size came from and why it is reasonable.** [Smallest meaningful difference, pilot data, or published studies? Explain.]{.fillin}
+
+**Practical limits on sample size** (animals available, cost, time, ethics approval). [ ]{.fillin}
+
+# Data handling {#sec-data}
+
+::: {.prompt}
+Decide **now** how you will handle the practical decisions that can quietly change a result. Rules you invent after seeing the data are not rules; they are choices.
+:::
+
+| Item | Your plan |
+|:--|:--|
+| **Raw data file(s)** (name and location; never edited by hand) | [For example: Data/open_field_raw.csv]{.fillin} |
+| **Unit of analysis** (one row per what?) and how repeated measures are combined | [For example: one row per mouse; average the two trials]{.fillin} |
+| **Exclusion criteria** (objective, decided in advance, with who decides) | [For example: exclude a mouse if the tracking failed or if it is ill; decision made blind to group]{.fillin} |
+| **Missing data** | [For example: report the number missing per group; analyze complete cases]{.fillin} |
+| **Outliers** (how identified, what you will do; never delete just because a value is inconvenient) | [For example: check for entry errors; report results with and without any value more than 3 SD from its group mean]{.fillin} |
+| **Transformations** (if the data are skewed) | [For example: log-transform distances only if the residuals are clearly skewed]{.fillin} |
+| **Checks for data-entry errors** | [For example: range checks and duplicate ID checks in code]{.fillin} |
+
+# Planned analysis {#sec-analysis}
+
+::: {.prompt}
+Name the **primary test** (use the Decision Guide), the assumptions it needs and how you will check them, and what you will do if they fail. Choose your effect size and confidence interval now. Keep a clear line between **confirmatory** analyses (planned here) and **exploratory** ones (you may do these later, but you must label them as exploratory).
+:::
+
+| Item | Your plan |
+|:--|:--|
+| **Primary analysis** (test, and the R function) | [For example: Welch two-sample t-test, t.test(distance_m ~ group)]{.fillin} |
+| **Why this test fits the design** | [Outcome type, number of groups, independence]{.fillin} |
+| **Assumptions and how I will check them** | [For example: independence from the design; normality with histograms and Q-Q plots; spread with SDs and boxplots]{.fillin} |
+| **If an assumption fails (plan B)** | [For example: Mann–Whitney U test, reported alongside the main result]{.fillin} |
+| **Effect size and confidence interval** | [For example: Cohen's d with 95% CI; mean difference with 95% CI]{.fillin} |
+| **Post hoc or multiple comparisons** (if 3+ groups or several outcomes) | [For example: Tukey HSD for all pairs; Holm correction across secondary outcomes]{.fillin} |
+| **Covariates** (if any) | [ ]{.fillin} |
+| **Secondary outcomes** (labeled as secondary) | [ ]{.fillin} |
+| **Exploratory analyses** (labeled as exploratory) | [ ]{.fillin} |
+| **Software** | [R version, packages (for example, tidyverse, effectsize, pwr)]{.fillin} |
+
+# Planned figures and tables
+
+::: {.prompt}
+Sketch what your main figure and table will show **before** you have data: what goes on each axis, which groups appear, and whether individual animals will be shown. Figures should show the data (for example, points for individual animals) plus a summary with an interval.
+:::
+
+**Main figure.** [For example: dot plot of distance traveled by group, one dot per mouse, with the mean and 95% CI.]{.fillin}
+
+**Main table.** [For example: group n, mean, SD, test statistic, p-value, effect size with CI.]{.fillin}
+
+# Interpretation rules {#sec-interp}
+
+::: {.prompt}
+Decide in advance how you will read the result. Statistical significance is not the same as importance, and a non-significant result is not proof of no effect.
+:::
+
+- **What result would support my hypothesis?** [For example: a significant increase in distance in the drug group, with a confidence interval that excludes zero and an effect of at least the size I planned to detect.]{.fillin}
+- **What result would not support it?** [ ]{.fillin}
+- **How will I interpret a non-significant result?** [For example: as inconclusive if the confidence interval includes both zero and effects I would consider meaningful.]{.fillin}
+- **Limits on what I can conclude** (for example, correlational design, one strain, one dose, small n). [ ]{.fillin}
+
+# Checklist before data collection
+
+- [ ] My research question and hypotheses are written, and the tails and α are chosen.
+- [ ] I have identified the independent unit (one "n").
+- [ ] Assignment to groups is random (or I can justify why not), and blinding is planned.
+- [ ] I have a sample size calculation, and I know what effect my realistic sample can detect.
+- [ ] Exclusion, missing-data, and outlier rules are written down.
+- [ ] My primary analysis, assumption checks, and plan B are chosen.
+- [ ] I have a plan for effect sizes, confidence intervals, and multiple comparisons.
+- [ ] My instructor has reviewed this plan, and I saved a dated copy.
+
+# Deviations log {#sec-deviations}
+
+After data collection starts, record every change from this plan, with the date and the reason. Changes made *because of what the data looked like* must be reported as such in your paper or poster.
+
+```{r}
+#| label: tbl-deviations
+#| tbl-cap: "Deviations from the plan (add a row for every change)"
+tribble(
+  ~Date,          ~`What changed`,                                 ~`Why`,                                          ~`Made before or after seeing the data?`,
+  "[YYYY-MM-DD]", "[For example: used 7 mice in the drug group]",   "[One mouse was ill and excluded (pre-set rule)]", "[Before]",
+  "",             "",                                               "",                                                ""
+) |>
+  plan_table(align = "llll")
+```
+
+# A completed example {#sec-example}
+
+::: {.callout-note collapse="true"}
+## Click to see a filled-in plan (a made-up experiment)
+
+**Research question.** Does a stimulant drug (amphetamine, 2 mg/kg) increase locomotor activity in adult male mice compared with saline?
+
+**Hypotheses.** H~0~: mean distance traveled is the same in the two groups (μ~drug~ − μ~saline~ = 0). H~1~: the means differ. Two-tailed; α = .05. A Type I error would mean reporting a drug effect when there is none; a Type II error would mean missing a real effect of the drug.
+
+**Design.** Between-groups; one factor (drug: saline vs. amphetamine); independent unit = one mouse (one measurement each). Mice are assigned using a random number list made by a lab mate who does not run the test. The experimenter is blind to group (syringes are coded). Same injection volume and timing for both groups; testing in the same room, at the same time of day, with groups alternated.
+
+**Outcome.** Total distance traveled (meters) in 30 minutes, from video tracking.
+
+**Sample size.** Expected effect: Cohen's *d* = 0.8 (large, based on published studies and a pilot). Two-sample t-test, α = .05, power = 80%: **26 mice per group** are needed. With only 8 mice per group available, power for *d* = 0.8 is about 32%, and the smallest effect detectable with 80% power is *d* ≈ 1.5. We will therefore treat the study as able to detect only very large effects and will say so in the report.
+
+**Data handling.** One row per mouse in `Data/open_field_raw.csv`, never edited by hand. Exclusion only for tracking failure or illness, decided blind to group. No outlier deletion; we will report results with and without any value more than 3 SD from its group mean.
+
+**Analysis.** Welch two-sample t-test, `t.test(distance_m ~ group)`. Assumptions: independence (from the design), approximate normality (histograms, Q-Q plots), and similar spread (SDs, boxplots). Plan B if normality fails: Mann–Whitney U test. Effect size: Cohen's *d* with 95% CI and the raw mean difference with 95% CI. One primary outcome only; no secondary outcomes.
+
+**Figure.** Dot plot of distance by group (one dot per mouse) with the mean and 95% CI.
+
+**Interpretation.** We will conclude that the drug increases locomotion if the 95% CI for the difference excludes zero. If *p* > .05, we will call the result inconclusive (the study is underpowered) rather than "no effect".
+:::
