@@ -293,7 +293,55 @@ wilcox <- wilcox.test(nor_clean$DI, mu = mu0, conf.int = TRUE, exact = FALSE) |>
 print(wilcox)
 
 
-# ---- 14. Write the result sentence -------------------------------------------
+# ---- 14. A second cohort: same population, different sample -----------------
+# The notebook (section "A second cohort") shows that a second sample from the
+# SAME population can lead to a different conclusion. Here is the same analysis
+# written as a function so both cohorts are treated identically.
+
+analyze_cohort <- function(file, label) {
+  dat <- read_csv(here("Data", file), show_col_types = FALSE) |>
+    mutate(total_s = time_novel_s + time_familiar_s,
+           DI      = (time_novel_s - time_familiar_s) / total_s) |>
+    filter(total_s >= min_explore)
+
+  tt <- t.test(dat$DI, mu = mu0) |> tidy()
+  es <- cohens_d(dat$DI, mu = mu0)   # effect size (named "es" to avoid clashing with column d)
+
+  tibble(Cohort = label, n = nrow(dat), M = tt$estimate, SD = sd(dat$DI),
+         t = tt$statistic, df = tt$parameter, p = tt$p.value,
+         ci_low = tt$conf.low, ci_high = tt$conf.high,
+         d = es$Cohens_d, d_low = es$CI_low, d_high = es$CI_high)
+}
+
+cohorts <- bind_rows(
+  analyze_cohort("novel_object_recognition.csv",         "Cohort 1"),
+  analyze_cohort("novel_object_recognition_cohort2.csv", "Cohort 2")
+)
+print(cohorts)
+
+# The true mean DI (0.15) is known ONLY because the data are simulated.
+true_mean <- 0.15
+
+fig_cohorts <- ggplot(cohorts, aes(x = Cohort, y = M, color = Cohort, shape = Cohort)) +
+  geom_hline(yintercept = mu0, linetype = "dashed", color = "gray30") +
+  geom_hline(yintercept = true_mean, linetype = "dotted", color = pal["green"],
+             linewidth = 1) +
+  geom_pointrange(aes(ymin = ci_low, ymax = ci_high), size = 0.8, linewidth = 1) +
+  annotate("text", x = 2.45, y = true_mean + 0.015, label = "True mean",
+           color = pal["green"], hjust = 1, size = 3.5) +
+  scale_color_manual(values = unname(pal[c("blue", "vermillion")])) +
+  labs(x = NULL, y = "Mean discrimination index (95% CI)") +
+  theme(legend.position = "none")
+print(fig_cohorts)
+
+ggsave(here("output", "figures", "fig_two_cohorts.png"), fig_cohorts,
+       width = 4.5, height = 4, dpi = 300)
+
+# Key lesson: Cohort 2 fails to reject H0 even though a real effect exists
+# (a Type II error). Never read "not significant" as "no effect".
+
+
+# ---- 15. Write the result sentence -------------------------------------------
 # Build the APA-style sentence from the saved objects so the numbers can never
 # be mistyped.
 result_sentence <- paste0(
@@ -307,7 +355,7 @@ result_sentence <- paste0(
 cat(result_sentence, "\n")
 
 
-# ---- 15. Record the computing environment -----------------------------------
+# ---- 16. Record the computing environment -----------------------------------
 # Lets you (or a collaborator) see exactly which R and package versions made
 # these results.
 sessionInfo()

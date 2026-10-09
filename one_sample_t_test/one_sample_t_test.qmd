@@ -132,7 +132,7 @@ Before the analysis, we decided that any mouse that explored the objects for **l
 
 ## Data description {#sec-data}
 
-The raw data are stored in `Data/novel_object_recognition.csv` (one row per mouse). The raw file is **never edited by hand**: all cleaning and calculations are done in code so they are documented and repeatable.
+The raw data are stored in `Data/novel_object_recognition.csv` (one row per mouse). The raw file is **never edited by hand**: all cleaning and calculations are done in code so they are documented and repeatable. A second, structurally identical file (`novel_object_recognition_cohort2.csv`) is used only in @sec-cohort2.
 
 ```{r}
 #| label: tbl-dictionary
@@ -483,6 +483,90 @@ wilcox <- wilcox.test(nor_clean$DI, mu = mu0, exact = FALSE) |> tidy()
 
 The Wilcoxon signed-rank test `r if ((wilcox$p.value < alpha) == (p_value < alpha)) "led to the same conclusion as" else "led to a different conclusion from"` the t-test, *V* = `r wilcox$statistic`, `r fmt_p(wilcox$p.value, md = TRUE)`.
 
+## A second cohort: same experiment, different result {#sec-cohort2}
+
+A real experiment gives you **one** sample. To see how much results can differ from one sample to the next, we also simulated a **second cohort** of 26 mice from the **same population**, with the same design and the same exclusion rule (`Data/novel_object_recognition_cohort2.csv`). Because the data are simulated, we happen to know the truth: the real mean DI is 0.15 (a true effect of about $d = 0.54$). In a real study, you never know this.
+
+::: {.callout-note}
+## A note on transparency
+The first cohort (used in all the analyses above) came from a random seed that was chosen, after trying a few, because it produced a sample resembling the true effect. Showing only that cohort would paint an overly rosy picture. The second cohort is the *first* random draw we tried. Reporting both is the honest way to show how much samples can vary.
+:::
+
+We repeat the identical analysis on both files with one small function, so that the two cohorts are treated exactly alike.
+
+```{r}
+#| label: cohorts
+true_mean <- 0.15   # known only because these data are simulated
+true_sd   <- 0.28
+
+analyze_cohort <- function(file, label) {
+  dat <- read_csv(here("Data", file), show_col_types = FALSE) |>
+    mutate(total_s = time_novel_s + time_familiar_s,
+           DI      = (time_novel_s - time_familiar_s) / total_s) |>
+    filter(total_s >= min_explore)
+
+  tt <- t.test(dat$DI, mu = mu0) |> tidy()
+  es <- cohens_d(dat$DI, mu = mu0)   # effect size (named "es" to avoid clashing with column d)
+
+  tibble(Cohort = label, n = nrow(dat), M = tt$estimate, SD = sd(dat$DI),
+         t = tt$statistic, df = tt$parameter, p = tt$p.value,
+         ci_low = tt$conf.low, ci_high = tt$conf.high,
+         d = es$Cohens_d, d_low = es$CI_low, d_high = es$CI_high)
+}
+
+cohorts <- bind_rows(
+  analyze_cohort("novel_object_recognition.csv",         "Cohort 1"),
+  analyze_cohort("novel_object_recognition_cohort2.csv", "Cohort 2")
+)
+
+c2 <- cohorts |> filter(Cohort == "Cohort 2")
+```
+
+```{r}
+#| label: tbl-cohorts
+#| tbl-cap: "The same analysis applied to two cohorts drawn from the same population"
+cohorts |>
+  transmute(
+    Cohort,
+    `N analyzed` = n,
+    `M (SD)`     = paste0(fmt_num(M), " (", fmt_num(SD), ")"),
+    `t(df)`      = paste0(fmt_num(t), " (", df, ")"),
+    p            = if_else(p < .001, "< .001", sub("^0", "", fmt_num(p, 3))),
+    `95% CI of mean` = paste0("[", fmt_num(ci_low), ", ", fmt_num(ci_high), "]"),
+    `Cohen's d`      = fmt_num(d),
+    `95% CI of d`    = paste0("[", fmt_num(d_low), ", ", fmt_num(d_high), "]")
+  ) |>
+  pub_table(align = "lccccccc")
+```
+
+```{r}
+#| label: fig-cohorts
+#| fig-cap: "Mean discrimination index and 95% confidence interval for each cohort. The dashed line marks no preference (DI = 0). The dotted line marks the true population mean, which is known only because these data are simulated."
+#| fig-alt: "Two points with confidence interval bars. Cohort 1 is above the dashed zero line with an interval that does not reach zero. Cohort 2 is near zero with an interval that crosses zero. A dotted line marks the true mean, which lies inside the Cohort 1 interval and just above the Cohort 2 interval."
+#| fig-width: 4.5
+#| fig-height: 4
+ggplot(cohorts, aes(x = Cohort, y = M, color = Cohort, shape = Cohort)) +
+  geom_hline(yintercept = mu0, linetype = "dashed", color = "gray30") +
+  geom_hline(yintercept = true_mean, linetype = "dotted", color = pal["green"],
+             linewidth = 1) +
+  geom_pointrange(aes(ymin = ci_low, ymax = ci_high), size = 0.8, linewidth = 1) +
+  annotate("text", x = 2.45, y = true_mean + 0.015, label = "True mean",
+           color = pal["green"], hjust = 1, size = 3.5) +
+  scale_color_manual(values = unname(pal[c("blue", "vermillion")])) +
+  labs(x = NULL, y = "Mean discrimination index (95% CI)") +
+  theme(legend.position = "none")
+```
+
+The two cohorts, drawn from the same population by the same procedure, led to **different conclusions** (@tbl-cohorts, @fig-cohorts). In Cohort 2, the mean DI was `r fmt_num(c2$M)` (*SD* = `r fmt_num(c2$SD)`), *t*(`r c2$df`) = `r fmt_num(c2$t)`, `r fmt_p(c2$p, md = TRUE)`, so we `r if (c2$p < alpha) "reject" else "fail to reject"` $H_0$. Yet we know a real effect exists. For Cohort 2, failing to reject $H_0$ is a **Type II error**, the kind of miss we expected in roughly `r round(100 * (1 - power_medium))`% of experiments of this size.
+
+What this comparison teaches:
+
+- **A single sample is one random draw.** The sample mean, the p-value, and the effect size all vary from sample to sample, even when the experiment, the animals, and the true effect are identical.
+- **"Significant" and "not significant" can come from similar data.** The two confidence intervals overlap substantially. A significant result in one study and a non-significant result in another does not mean the studies *disagree*. The difference between "significant" and "not significant" is not itself necessarily significant.
+- **The confidence intervals tell the real story.** Cohort 2's interval for *d* (`r fmt_num(c2$d_low)` to `r fmt_num(c2$d_high)`) includes 0, but it also includes medium and even large effects, so these data cannot rule out an effect like the true one. The result is "not significant" because the study was underpowered, not because there is no effect. (A 95% interval also misses the true value in about 1 sample in 20. Here, Cohort 2's interval for the mean, [`r fmt_num(c2$ci_low)`, `r fmt_num(c2$ci_high)`], stops just short of the true mean of `r true_mean`.)
+- **Do not interpret a non-significant result as "no effect."** It means this study did not provide enough evidence.
+- **Replication and larger samples matter.** More mice, or combining evidence across studies, reduces the chance of a miss (see @sec-your-turn).
+
 ## Results write-up {#sec-writeup}
 
 Below is how the result would be written in the Results section of a report. The numbers are inserted directly from the analysis (using inline R code), so they cannot be mistyped and they update automatically if the data change.
@@ -543,7 +627,7 @@ The effect size was [small / medium / large] (Cohen's d = __, 95% CI [__, __]).
 
 **If the result is not significant**, say so plainly and do not conclude the effect "does not exist." Report the confidence interval (which effects are still compatible with the data?) and the sensitivity analysis (what size of effect could the study detect?). For example:
 
-> The mean discrimination index did not differ from zero, *t*(23) = 0.76, *p* = .45, *d* = 0.16, 95% CI [−0.25, 0.56]. With 24 mice, the study had 80% power to detect effects of *d* ≥ 0.60, so smaller effects cannot be ruled out.
+> (Using Cohort 2 from @sec-cohort2.) The mean discrimination index did not differ from zero, *t*(`r c2$df`) = `r fmt_num(c2$t)`, `r fmt_p(c2$p, md = TRUE)`, *d* = `r fmt_num(c2$d)`, 95% CI [`r fmt_num(c2$d_low)`, `r fmt_num(c2$d_high)`]. With `r c2$n` mice, the study had 80% power to detect effects of *d* ≥ `r fmt_num(sens$d)`, so smaller effects cannot be ruled out.
 
 # Your Turn {#sec-your-turn}
 
@@ -554,7 +638,8 @@ Change one thing at a time, re-render, and describe in the notebook log (below) 
 3. **Sample size planning.** Use `pwr.t.test()` to find how many mice you would need for 90% power to detect $d = 0.4$. How does it compare to the 80% power answer?
 4. **Simulation.** In the simulation, change `d_true` to 0.2, then 0.8. How do the power and Type II error rate change? What happens to the Type I error rate?
 5. **Your own data.** Replace the CSV in `Data/` with a file of your own (one row per subject, one column per variable), update the file name and variable names, and write your own problem statement, methods, and conclusions.
-6. **Interpretation.** Rewrite the Conclusion paragraph in your own words. What would you do next to follow up on this finding?
+6. **Combining evidence.** Stack the two cohorts with `bind_rows()` and run the t-test on all mice together. How do the mean, the p-value, the effect size, and the width of the confidence interval change? What does this suggest about replication?
+7. **Interpretation.** Rewrite the Conclusion paragraph in your own words. What would you do next to follow up on this finding?
 
 # Notebook Log {#sec-log}
 
